@@ -16,7 +16,6 @@ private:
     SteamNetworkingManager *manager_;
     SteamRoomManager *roomManager_;
     
-    STEAM_CALLBACK(SteamFriendsCallbacks, OnGameRichPresenceJoinRequested, GameRichPresenceJoinRequested_t);
     STEAM_CALLBACK(SteamFriendsCallbacks, OnGameLobbyJoinRequested, GameLobbyJoinRequested_t);
 };
 

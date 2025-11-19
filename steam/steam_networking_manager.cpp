@@ -18,7 +18,6 @@ SteamNetworkingManager::SteamNetworkingManager()
       g_hConnection(k_HSteamNetConnection_Invalid),
       io_context_(nullptr), server_(nullptr), localPort_(nullptr), messageHandler_(nullptr), hostPing_(0)
 {
-    std::cout << "Initialized SteamNetworkingManager" << std::endl;
 }
 
 SteamNetworkingManager::~SteamNetworkingManager()
@@ -31,9 +30,11 @@ SteamNetworkingManager::~SteamNetworkingManager()
 bool SteamNetworkingManager::initialize()
 {
     instance = this;
-    if (!SteamAPI_Init())
+    
+    // Steam API should already be initialized before calling this
+    if (!SteamAPI_IsSteamRunning())
     {
-        std::cerr << "Failed to initialize Steam API" << std::endl;
+        std::cerr << "Steam is not running" << std::endl;
         return false;
     }
 
@@ -89,7 +90,7 @@ bool SteamNetworkingManager::initialize()
     m_pInterface = SteamNetworkingSockets();
 
     // Check if callbacks are registered
-    std::cout << "Steam API initialized" << std::endl;
+    std::cout << "Steam Networking Manager initialized successfully" << std::endl;
 
     return true;
 }

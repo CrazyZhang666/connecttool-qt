@@ -9,74 +9,6 @@ SteamFriendsCallbacks::SteamFriendsCallbacks(SteamNetworkingManager *manager, St
     std::cout << "SteamFriendsCallbacks constructor called" << std::endl;
 }
 
-void SteamFriendsCallbacks::OnGameRichPresenceJoinRequested(GameRichPresenceJoinRequested_t *pCallback)
-{
-    std::cout << "GameRichPresenceJoinRequested received" << std::endl;
-    if (manager_)
-    {
-        const char *connectStr = pCallback->m_rgchConnect;
-        std::cout << "Connect string: '" << (connectStr ? connectStr : "null") << "'" << std::endl;
-        if (connectStr && connectStr[0] != '\0')
-        {
-            try
-            {
-                uint64 id = std::stoull(connectStr);
-                std::string str = connectStr;
-                std::cout << "Parsed ID: " << id << std::endl;
-                if (str.find("7656119") == 0)
-                {
-                    // It's a Steam ID, join host directly
-                    std::cout << "Parsed Steam ID: " << id << ", joining host" << std::endl;
-                    if (!manager_->isHost() && !manager_->isConnected())
-                    {
-                        manager_->joinHost(id);
-                        // Start TCP Server if dependencies are set
-                        if (manager_->getServer() && !(*manager_->getServer()))
-                        {
-                            *manager_->getServer() = std::make_unique<TCPServer>(8888, manager_);
-                            if (!(*manager_->getServer())->start())
-                            {
-                                std::cerr << "Failed to start TCP server" << std::endl;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        std::cout << "Already host or connected, ignoring join request" << std::endl;
-                    }
-                }
-                else
-                {
-                    // Assume it's a lobby ID
-                    CSteamID lobbySteamID(id);
-                    std::cout << "Parsed lobby ID: " << id << std::endl;
-                    if (!manager_->isHost() && !manager_->isConnected())
-                    {
-                        std::cout << "Joining lobby from invite: " << id << std::endl;
-                        roomManager_->joinLobby(lobbySteamID);
-                    }
-                    else
-                    {
-                        std::cout << "Already host or connected, ignoring invite" << std::endl;
-                    }
-                }
-            }
-            catch (const std::exception &e)
-            {
-                std::cerr << "Failed to parse connect string: " << connectStr << " error: " << e.what() << std::endl;
-            }
-        }
-        else
-        {
-            std::cerr << "Empty connect string in join request" << std::endl;
-        }
-    }
-    else
-    {
-        std::cout << "Manager is null" << std::endl;
-    }
-}
-
 void SteamFriendsCallbacks::OnGameLobbyJoinRequested(GameLobbyJoinRequested_t *pCallback)
 {
     std::cout << "GameLobbyJoinRequested received" << std::endl;
@@ -115,12 +47,10 @@ void SteamMatchmakingCallbacks::OnLobbyCreated(LobbyCreated_t *pCallback, bool b
     {
         roomManager_->setCurrentLobby(pCallback->m_ulSteamIDLobby);
         std::cout << "Lobby created: " << roomManager_->getCurrentLobby().ConvertToUint64() << std::endl;
-        // Set Rich Presence with lobby ID
-        std::string lobbyStr = std::to_string(roomManager_->getCurrentLobby().ConvertToUint64());
-        SteamFriends()->SetRichPresence("connect", lobbyStr.c_str());
-        SteamFriends()->SetRichPresence("status", "主持游戏房间");
-        SteamFriends()->SetRichPresence("steam_display", "#StatusWithConnectFormat");
-        std::cout << "Set Rich Presence connect to: " << lobbyStr << std::endl;
+        
+        // Set Rich Presence to enable invite functionality
+        SteamFriends()->SetRichPresence("steam_display", "#Status_InLobby");
+        SteamFriends()->SetRichPresence("connect", std::to_string(pCallback->m_ulSteamIDLobby).c_str());
     }
     else
     {
@@ -150,6 +80,11 @@ void SteamMatchmakingCallbacks::OnLobbyEntered(LobbyEnter_t *pCallback)
     {
         roomManager_->setCurrentLobby(pCallback->m_ulSteamIDLobby);
         std::cout << "Entered lobby: " << pCallback->m_ulSteamIDLobby << std::endl;
+        
+        // Set Rich Presence to enable invite functionality
+        SteamFriends()->SetRichPresence("steam_display", "#Status_InLobby");
+        SteamFriends()->SetRichPresence("connect", std::to_string(pCallback->m_ulSteamIDLobby).c_str());
+        
         // Only join host if not the host
         if (!manager_->isHost())
         {
@@ -180,6 +115,9 @@ SteamRoomManager::SteamRoomManager(SteamNetworkingManager *networkingManager)
 {
     steamFriendsCallbacks = new SteamFriendsCallbacks(networkingManager_, this);
     steamMatchmakingCallbacks = new SteamMatchmakingCallbacks(networkingManager_, this);
+
+    // Clear Rich Presence on initialization to prevent "Invite to game" showing when not in a lobby
+    SteamFriends()->ClearRichPresence();
 }
 
 SteamRoomManager::~SteamRoomManager()
@@ -207,6 +145,9 @@ void SteamRoomManager::leaveLobby()
     {
         SteamMatchmaking()->LeaveLobby(currentLobby);
         currentLobby = k_steamIDNil;
+        
+        // Clear Rich Presence when leaving lobby
+        SteamFriends()->ClearRichPresence();
     }
 }
 
@@ -248,7 +189,6 @@ bool SteamRoomManager::startHosting()
     {
         networkingManager_->getIsHost() = true;
         std::cout << "Created listen socket for hosting game room" << std::endl;
-        // Rich Presence is set in OnLobbyCreated callback
         return true;
     }
     else

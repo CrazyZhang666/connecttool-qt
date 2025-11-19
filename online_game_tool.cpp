@@ -27,6 +27,13 @@ std::unique_ptr<TCPServer> server;
 
 int main()
 {
+    // Initialize Steam API first
+    if (!SteamAPI_Init())
+    {
+        std::cerr << "Failed to initialize Steam API" << std::endl;
+        return 1;
+    }
+
     boost::asio::io_context io_context;
 
     // Initialize Steam Networking Manager
@@ -34,6 +41,7 @@ int main()
     if (!steamManager.initialize())
     {
         std::cerr << "Failed to initialize Steam Networking Manager" << std::endl;
+        SteamAPI_Shutdown();
         return 1;
     }
 
@@ -100,17 +108,15 @@ int main()
                 ImGui::PushID(friendPair.first.ConvertToUint64());
                 if (ImGui::Button(("邀请 " + friendPair.second).c_str()))
                 {
-                    // Send invite via Steam with lobby ID as connect string
-                    std::string connectStr = std::to_string(roomManager.getCurrentLobby().ConvertToUint64());
-                    // Safety check for SteamFriends
-                    if (SteamFriends())
+                    // Send invite via Steam to lobby
+                    if (SteamMatchmaking())
                     {
-                        SteamFriends()->InviteUserToGame(friendPair.first, connectStr.c_str());
-                        std::cout << "Sent invite to " << friendPair.second << " with connect string: " << connectStr << std::endl;
+                        SteamMatchmaking()->InviteUserToLobby(roomManager.getCurrentLobby(), friendPair.first);
+                        std::cout << "Sent lobby invite to " << friendPair.second << std::endl;
                     }
                     else
                     {
-                        std::cerr << "SteamFriends() is null! Cannot send invite." << std::endl;
+                        std::cerr << "SteamMatchmaking() is null! Cannot send invite." << std::endl;
                     }
                 }
                 ImGui::PopID();
@@ -165,13 +171,9 @@ int main()
                 }
             }
         }
-        if (steamManager.isHost())
+        if (steamManager.isHost() || steamManager.isConnected())
         {
-            ImGui::Text("正在主持游戏房间。邀请朋友!");
-            ImGui::Separator();
-            ImGui::InputInt("本地端口", &localPort);
-            ImGui::Separator();
-            renderInviteFriends();
+            ImGui::Text(steamManager.isHost() ? "正在主持游戏房间。邀请朋友!" : "已连接到游戏房间。邀请朋友!");
             ImGui::Separator();
             if (ImGui::Button("断开连接"))
             {
@@ -183,20 +185,9 @@ int main()
                     server.reset();
                 }
             }
-        }
-        if (steamManager.isConnected() && !steamManager.isHost())
-        {
-            ImGui::Text("已连接到游戏房间。邀请朋友!");
-            ImGui::Separator();
-            if (ImGui::Button("断开连接"))
+            if (steamManager.isHost())
             {
-                roomManager.leaveLobby();
-                steamManager.disconnect();
-                if (server)
-                {
-                    server->stop();
-                    server.reset();
-                }
+                ImGui::InputInt("本地端口", &localPort);
             }
             ImGui::Separator();
             renderInviteFriends();
