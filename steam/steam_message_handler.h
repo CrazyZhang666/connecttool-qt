@@ -22,8 +22,7 @@ public:
     std::shared_ptr<MultiplexManager> getMultiplexManager(HSteamNetConnection conn);
 
 private:
-    void run();
-    void pollMessages();
+    void startAsyncPoll();
 
     boost::asio::io_context& io_context_;
     ISteamNetworkingSockets* m_pInterface_;
@@ -34,9 +33,9 @@ private:
 
     std::map<HSteamNetConnection, std::shared_ptr<MultiplexManager>> multiplexManagers_;
 
-    std::thread thread_;
-    std::thread io_thread_;
+    std::unique_ptr<boost::asio::steady_timer> timer_;
     bool running_;
+    int currentPollInterval_; // 当前轮询间隔（毫秒）
 };
 
 #endif // STEAM_MESSAGE_HANDLER_H
