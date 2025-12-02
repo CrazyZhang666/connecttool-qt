@@ -49,7 +49,7 @@ PersonaDisplay personaStateDisplay(EPersonaState state)
 } // namespace
 
 Backend::Backend(QObject *parent)
-    : QObject(parent), steamReady_(false), localPort_(25565), localBindPort_(8888), lastTcpClients_(0)
+    : QObject(parent), steamReady_(false), localPort_(25565), localBindPort_(8888), lastTcpClients_(0), lastMemberLogCount_(-1)
 {
     // Set a default app id so Steam can bootstrap in development environments
     qputenv("SteamAppId", QByteArray("480"));
@@ -432,6 +432,7 @@ void Backend::updateMembersList()
     if (!steamReady_ || !steamManager_)
     {
         membersModel_.setMembers({});
+        memberAvatars_.clear();
         return;
     }
 
@@ -454,6 +455,29 @@ void Backend::updateMembersList()
     std::unordered_set<uint64_t> seen;
     seen.reserve(lobbyMembers.size());
 
+    const auto avatarForMember = [this](const CSteamID &memberId) -> QString {
+        const uint64_t key = memberId.ConvertToUint64();
+        const auto cached = memberAvatars_.find(key);
+        if (cached != memberAvatars_.end())
+        {
+            return cached->second;
+        }
+
+        const std::string avatarData = SteamUtils::getAvatarDataUrl(memberId);
+        if (avatarData.empty())
+        {
+            return {};
+        }
+
+        QString avatar = QString::fromStdString(avatarData);
+        memberAvatars_.emplace(key, avatar);
+        return avatar;
+    };
+
+    const auto isMemberHost = [&](const CSteamID &member) -> bool {
+        return hostId.IsValid() && member == hostId;
+    };
+
     for (const auto &memberId : lobbyMembers)
     {
         const uint64 memberValue = memberId.ConvertToUint64();
@@ -462,16 +486,24 @@ void Backend::updateMembersList()
         MembersModel::Entry entry;
         entry.steamId = QString::number(memberValue);
         entry.displayName = QString::fromUtf8(SteamFriends()->GetFriendPersonaName(memberId));
+        entry.avatar = avatarForMember(memberId);
         entry.relay = QStringLiteral("-");
         entry.ping = -1;
+        const bool memberIsHost = isMemberHost(memberId);
 
         if (memberId == myId)
         {
-            entry.relay = tr("本机");
+            entry.ping = 0;
+            entry.relay = isHost() ? tr("房主") : tr("本机");
         }
         else
         {
-            if (isHost())
+            if (memberIsHost)
+            {
+                entry.relay = tr("房主");
+                entry.ping = steamManager_->getHostPing();
+            }
+            else if (isHost())
             {
                 std::lock_guard<std::mutex> lock(steamManager_->getConnectionsMutex());
                 for (const auto &conn : steamManager_->getConnections())
@@ -484,14 +516,6 @@ void Backend::updateMembersList()
                         entry.relay = QString::fromStdString(steamManager_->getConnectionRelayInfo(conn));
                         break;
                     }
-                }
-            }
-            else if (hostId.IsValid() && memberId == hostId)
-            {
-                entry.ping = steamManager_->getHostPing();
-                if (steamManager_->getConnection() != k_HSteamNetConnection_Invalid)
-                {
-                    entry.relay = QString::fromStdString(steamManager_->getConnectionRelayInfo(steamManager_->getConnection()));
                 }
             }
         }
@@ -523,10 +547,23 @@ void Backend::updateMembersList()
             MembersModel::Entry entry;
             entry.steamId = QString::number(remoteValue);
             entry.displayName = QString::fromUtf8(SteamFriends()->GetFriendPersonaName(remoteId));
+            entry.avatar = avatarForMember(remoteId);
             entry.ping = steamManager_->getConnectionPing(conn);
-            entry.relay = QString::fromStdString(steamManager_->getConnectionRelayInfo(conn));
+            const std::string relayInfo = steamManager_->getConnectionRelayInfo(conn);
+            entry.relay = relayInfo.empty() ? tr("直连") : QString::fromStdString(relayInfo);
 
             entries.push_back(std::move(entry));
+        }
+    }
+
+    const int newCount = static_cast<int>(entries.size());
+    if (newCount != lastMemberLogCount_)
+    {
+        lastMemberLogCount_ = newCount;
+        qDebug() << "[Members] updated count:" << newCount;
+        for (const auto &entry : entries)
+        {
+            qDebug() << "   member" << entry.displayName << "(" << entry.steamId << ")";
         }
     }
 

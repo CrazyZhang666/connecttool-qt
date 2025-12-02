@@ -221,62 +221,110 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         Layout.preferredHeight: 280
 
-                        ListView {
-                            id: memberList
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.margins: 8
-                            clip: true
-                            model: backend.membersModel
-                            spacing: 10
-                            ScrollBar.vertical: ScrollBar {}
-                            delegate: Rectangle {
-                                required property string displayName
-                                required property string steamId
-                                required property var ping
-                                required property string relay
-                                radius: 10
-                                color: "#162033"
-                                border.color: "#1f2f45"
-                                width: memberList.width
-                                implicitHeight: 68
+                        Column {
+                            anchors.fill: parent
+                            anchors.margins: 12
+                            spacing: 12
 
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 12
-                                    spacing: 12
+                            Repeater {
+                                id: memberRepeater
+                                model: backend.membersModel
+                                delegate: Rectangle {
+                                    required property string displayName
+                                    required property string steamId
+                                    required property string avatar
+                                    required property var ping
+                                    required property string relay
+                                    radius: 10
+                                    color: "#162033"
+                                    border.color: "#1f2f45"
+                                    width: parent ? parent.width : 0
+                                    height: implicitHeight
+                                    implicitHeight: rowLayout.implicitHeight + 24
+                                    Component.onCompleted: console.log("[QML] member delegate", displayName, steamId, ping, relay)
 
-                                    ColumnLayout {
-                                        spacing: 2
-                                        Layout.fillWidth: true
-                                        Label {
-                                            text: displayName
-                                            font.pixelSize: 16
-                                            color: "#e1edff"
-                                            elide: Text.ElideRight
+                                    RowLayout {
+                                        id: rowLayout
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 12
+
+                                        Item {
+                                            width: 48
+                                            height: 48
+                                            Layout.alignment: Qt.AlignVCenter
+                                            Layout.preferredWidth: 48
+                                            Layout.preferredHeight: 48
+                                            Rectangle {
+                                                id: memberAvatarFrame
+                                                anchors.fill: parent
+                                                radius: width / 2
+                                                color: avatar.length > 0 ? "transparent" : "#1a2436"
+                                                border.color: avatar.length > 0 ? "transparent" : "#1f2f45"
+                                                layer.enabled: avatar.length > 0
+                                                layer.effect: OpacityMask {
+                                                    source: memberAvatarFrame
+                                                    maskSource: Rectangle {
+                                                        width: memberAvatarFrame.width
+                                                        height: memberAvatarFrame.height
+                                                        radius: memberAvatarFrame.width / 2
+                                                        color: "white"
+                                                    }
+                                                }
+                                                Image {
+                                                    anchors.fill: parent
+                                                    source: avatar
+                                                    visible: avatar.length > 0
+                                                    fillMode: Image.PreserveAspectCrop
+                                                    smooth: true
+                                                }
+                                                Label {
+                                                    anchors.centerIn: parent
+                                                    visible: avatar.length === 0
+                                                    text: displayName.length > 0 ? displayName[0] : "?"
+                                                    color: "#6f7e9c"
+                                                    font.pixelSize: 18
+                                                }
+                                            }
                                         }
-                                        Label {
-                                            text: qsTr("SteamID: %1").arg(steamId)
-                                            font.pixelSize: 12
-                                            color: "#7f8cab"
-                                            elide: Text.ElideRight
-                                        }
-                                    }
 
-                                    ColumnLayout {
-                                        spacing: 2
-                                    Label {
-                                        text: (ping === undefined || ping === null)
-                                              ? qsTr("-")
-                                              : qsTr("%1 ms").arg(ping)
-                                        color: "#7fded1"
-                                        font.pixelSize: 14
-                                    }
-                                        Label {
-                                            text: relay.length > 0 ? relay : "-"
-                                            color: "#8ea4c8"
-                                            font.pixelSize: 12
-                                            elide: Text.ElideRight
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Layout.fillWidth: true
+                                            Label {
+                                                text: displayName
+                                                font.pixelSize: 16
+                                                color: "#e1edff"
+                                                elide: Text.ElideRight
+                                            }
+                                            Label {
+                                                text: qsTr("SteamID: %1").arg(steamId)
+                                                font.pixelSize: 12
+                                                color: "#7f8cab"
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                                            Label {
+                                                text: (ping === undefined || ping === null)
+                                                      ? qsTr("-")
+                                                      : qsTr("%1 ms").arg(ping)
+                                                color: "#7fded1"
+                                                font.pixelSize: 14
+                                                horizontalAlignment: Text.AlignRight
+                                                Layout.alignment: Qt.AlignRight
+                                            }
+                                            Label {
+                                                text: relay.length > 0 ? relay : "-"
+                                                color: "#8ea4c8"
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
+                                                horizontalAlignment: Text.AlignRight
+                                                Layout.alignment: Qt.AlignRight
+                                            }
                                         }
                                     }
                                 }
@@ -284,7 +332,7 @@ ApplicationWindow {
                         }
 
                         Column {
-                            visible: memberList.count === 0
+                            visible: memberRepeater.count === 0
                             anchors.centerIn: parent
                             spacing: 6
                             Label { text: qsTr("暂无成员"); color: "#8090b3" }

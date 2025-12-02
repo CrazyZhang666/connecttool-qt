@@ -1,4 +1,5 @@
 #include "backend.h"
+#include "members_model.h"
 
 #include <QCoreApplication>
 #include <QGuiApplication>
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
     QQuickStyle::setStyle(QStringLiteral("Material"));
 
     qmlRegisterUncreatableType<FriendsModel>("ConnectTool", 1, 0, "FriendsModel", "Provided by backend");
+    qmlRegisterUncreatableType<MembersModel>("ConnectTool", 1, 0, "MembersModel", "Provided by backend");
 
     Backend backend;
 

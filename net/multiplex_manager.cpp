@@ -1,5 +1,6 @@
 #include "multiplex_manager.h"
 #include <algorithm>
+#include <chrono>
 #include <cstring>
 #include <iostream>
 #include <random>
@@ -28,7 +29,10 @@ std::string generateId(std::size_t length = 6)
 MultiplexManager::MultiplexManager(ISteamNetworkingSockets *steamInterface, HSteamNetConnection steamConn,
                                    boost::asio::io_context &io_context, bool &isHost, int &localPort)
     : steamInterface_(steamInterface), steamConn_(steamConn),
-      io_context_(io_context), isHost_(isHost), localPort_(localPort) {}
+      io_context_(io_context), isHost_(isHost), localPort_(localPort)
+{
+    sendTimer_ = std::make_unique<boost::asio::steady_timer>(io_context_);
+}
 
 MultiplexManager::~MultiplexManager()
 {
@@ -78,6 +82,10 @@ bool MultiplexManager::removeClient(const std::string &id)
     {
         std::cout << "Removed client with id " << id << std::endl;
     }
+    {
+        std::lock_guard<std::mutex> queueLock(queueMutex_);
+        pendingPackets_.erase(id);
+    }
     return removed;
 }
 
@@ -92,47 +100,143 @@ std::shared_ptr<tcp::socket> MultiplexManager::getClient(const std::string &id)
     return nullptr;
 }
 
-namespace
-{
-
-void sendPacketInternal(ISteamNetworkingSockets *iface,
-                        HSteamNetConnection conn,
-                        const std::string &id,
-                        const char *data,
-                        size_t len,
-                        int type)
+std::vector<char> MultiplexManager::buildPacket(const std::string &id, const char *data, size_t len, int type) const
 {
     const size_t idLen = id.size() + 1;
     const size_t payloadLen = (type == 0 ? len : 0);
     const size_t packetSize = idLen + sizeof(uint32_t) + payloadLen;
     std::vector<char> packet(packetSize);
-    std::memcpy(&packet[0], id.c_str(), idLen);
-    auto *pType = reinterpret_cast<uint32_t *>(&packet[idLen]);
+    std::memcpy(packet.data(), id.c_str(), idLen);
+    auto *pType = reinterpret_cast<uint32_t *>(packet.data() + idLen);
     *pType = type;
     if (payloadLen > 0 && data)
     {
-        std::memcpy(&packet[idLen + sizeof(uint32_t)], data, payloadLen);
+        std::memcpy(packet.data() + idLen + sizeof(uint32_t), data, payloadLen);
     }
-    iface->SendMessageToConnection(conn, packet.data(), packet.size(), k_nSteamNetworkingSend_Reliable, nullptr);
+    return packet;
 }
 
-} // namespace
+bool MultiplexManager::trySendPacket(const std::vector<char> &packet)
+{
+    if (packet.empty())
+    {
+        return true;
+    }
+    EResult result = steamInterface_->SendMessageToConnection(
+        steamConn_, packet.data(), static_cast<uint32>(packet.size()), k_nSteamNetworkingSend_Reliable, nullptr);
+    if (result == k_EResultOK)
+    {
+        return true;
+    }
+    if (result == k_EResultLimitExceeded)
+    {
+        return false;
+    }
+
+    if (result != k_EResultNoConnection && result != k_EResultInvalidParam)
+    {
+        std::cerr << "[Multiplex] SendMessageToConnection failed with result " << static_cast<int>(result)
+                  << std::endl;
+    }
+    return true;
+}
+
+void MultiplexManager::enqueuePacket(const std::string &id, std::vector<char> packet)
+{
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        pendingPackets_[id].push_back(std::move(packet));
+    }
+    scheduleFlush();
+}
+
+void MultiplexManager::flushPendingPackets()
+{
+    std::unique_lock<std::mutex> lock(queueMutex_);
+    for (auto it = pendingPackets_.begin(); it != pendingPackets_.end();)
+    {
+        auto &queue = it->second;
+        while (!queue.empty())
+        {
+            const std::vector<char> &packet = queue.front();
+            lock.unlock();
+            const bool sent = trySendPacket(packet);
+            lock.lock();
+            if (!sent)
+            {
+                return;
+            }
+            queue.pop_front();
+        }
+        if (queue.empty())
+        {
+            it = pendingPackets_.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+void MultiplexManager::scheduleFlush()
+{
+    bool needSchedule = false;
+    {
+        std::lock_guard<std::mutex> lock(queueMutex_);
+        if (!flushScheduled_)
+        {
+            flushScheduled_ = true;
+            needSchedule = true;
+        }
+    }
+    if (!needSchedule)
+    {
+        return;
+    }
+
+    sendTimer_->expires_after(std::chrono::milliseconds(5));
+    sendTimer_->async_wait([this](const boost::system::error_code &ec) {
+        if (!ec)
+        {
+            flushPendingPackets();
+        }
+        bool shouldReschedule = false;
+        {
+            std::lock_guard<std::mutex> lock(queueMutex_);
+            flushScheduled_ = false;
+            shouldReschedule = !pendingPackets_.empty();
+        }
+        if (shouldReschedule)
+        {
+            scheduleFlush();
+        }
+    });
+}
 
 void MultiplexManager::sendTunnelPacket(const std::string &id, const char *data, size_t len, int type)
 {
+    auto pushPacket = [this, &id](const char *ptr, size_t amount, int packetType) {
+        auto packet = buildPacket(id, ptr, amount, packetType);
+        if (!trySendPacket(packet))
+        {
+            enqueuePacket(id, std::move(packet));
+        }
+    };
+
     if (type == 0 && data && len > kTunnelChunkBytes)
     {
         size_t offset = 0;
         while (offset < len)
         {
             const size_t chunk = std::min(kTunnelChunkBytes, len - offset);
-            sendPacketInternal(steamInterface_, steamConn_, id, data + offset, chunk, 0);
+            pushPacket(data + offset, chunk, 0);
             offset += chunk;
         }
         return;
     }
 
-    sendPacketInternal(steamInterface_, steamConn_, id, data, len, type);
+    pushPacket(data, len, type);
 }
 
 void MultiplexManager::handleTunnelPacket(const char *data, size_t len)

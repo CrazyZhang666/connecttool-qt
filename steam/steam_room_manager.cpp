@@ -117,7 +117,7 @@ void SteamMatchmakingCallbacks::OnLobbyEntered(LobbyEnter_t *pCallback)
 
 void SteamMatchmakingCallbacks::OnLobbyChatUpdate(LobbyChatUpdate_t *pCallback)
 {
-    if (!roomManager_)
+    if (!roomManager_ || !manager_)
     {
         return;
     }
@@ -130,6 +130,25 @@ void SteamMatchmakingCallbacks::OnLobbyChatUpdate(LobbyChatUpdate_t *pCallback)
 
     std::cout << "Lobby chat updated for lobby " << pCallback->m_ulSteamIDLobby
               << " change flags " << pCallback->m_rgfChatMemberStateChange << std::endl;
+
+    const uint32 changeFlags = pCallback->m_rgfChatMemberStateChange;
+    const bool memberLeft = (changeFlags & k_EChatMemberStateChangeLeft) ||
+                            (changeFlags & k_EChatMemberStateChangeDisconnected) ||
+                            (changeFlags & k_EChatMemberStateChangeKicked) ||
+                            (changeFlags & k_EChatMemberStateChangeBanned);
+
+    if (!memberLeft)
+    {
+        return;
+    }
+
+    CSteamID changedUser = pCallback->m_steamIDUserChanged;
+    if (changedUser == manager_->getHostSteamID() && !manager_->isHost())
+    {
+        std::cout << "Host left lobby, disconnecting client locally" << std::endl;
+        manager_->disconnect();
+        roomManager_->leaveLobby();
+    }
 }
 
 SteamRoomManager::SteamRoomManager(SteamNetworkingManager *networkingManager)

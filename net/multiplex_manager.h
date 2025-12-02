@@ -2,6 +2,8 @@
 
 #include <unordered_map>
 #include <unordered_set>
+#include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -37,6 +39,15 @@ private:
     int& localPort_;
     std::unordered_map<std::string, std::vector<char>> readBuffers_;
     std::unordered_set<std::string> missingClients_;
+    std::map<std::string, std::deque<std::vector<char>>> pendingPackets_;
+    std::mutex queueMutex_;
+    std::unique_ptr<boost::asio::steady_timer> sendTimer_;
+    bool flushScheduled_ = false;
 
     void startAsyncRead(const std::string& id);
+    std::vector<char> buildPacket(const std::string &id, const char *data, size_t len, int type) const;
+    bool trySendPacket(const std::vector<char> &packet);
+    void enqueuePacket(const std::string &id, std::vector<char> packet);
+    void flushPendingPackets();
+    void scheduleFlush();
 };

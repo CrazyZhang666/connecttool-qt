@@ -64,3 +64,20 @@ std::vector<SteamUtils::FriendInfo> SteamUtils::getFriendsList()
     }
     return friendsList;
 }
+
+std::string SteamUtils::getAvatarDataUrl(const CSteamID &id)
+{
+    if (!SteamFriends())
+    {
+        return {};
+    }
+
+    const int handle = SteamFriends()->GetSmallFriendAvatar(id);
+    if (handle <= 0)
+    {
+        SteamFriends()->RequestUserInformation(id, true);
+        return {};
+    }
+
+    return buildAvatarDataUrl(handle);
+}

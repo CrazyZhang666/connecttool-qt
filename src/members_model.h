@@ -14,6 +14,7 @@ public:
     {
         SteamIdRole = Qt::UserRole + 1,
         DisplayNameRole,
+        AvatarRole,
         PingRole,
         RelayRole
     };
@@ -22,6 +23,7 @@ public:
     {
         QString steamId;
         QString displayName;
+        QString avatar;
         int ping = -1;
         QString relay;
     };

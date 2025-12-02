@@ -15,4 +15,5 @@ public:
     };
 
     static std::vector<FriendInfo> getFriendsList();
+    static std::string getAvatarDataUrl(const CSteamID &id);
 };

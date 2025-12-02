@@ -30,6 +30,8 @@ QVariant MembersModel::data(const QModelIndex &index, int role) const
         return entry.displayName;
     case SteamIdRole:
         return entry.steamId;
+    case AvatarRole:
+        return entry.avatar;
     case PingRole:
         return entry.ping >= 0 ? QVariant(entry.ping) : QVariant();
     case RelayRole:
@@ -44,6 +46,7 @@ QHash<int, QByteArray> MembersModel::roleNames() const
     QHash<int, QByteArray> roles;
     roles[SteamIdRole] = "steamId";
     roles[DisplayNameRole] = "displayName";
+    roles[AvatarRole] = "avatar";
     roles[PingRole] = "ping";
     roles[RelayRole] = "relay";
     return roles;
@@ -51,8 +54,37 @@ QHash<int, QByteArray> MembersModel::roleNames() const
 
 void MembersModel::setMembers(std::vector<Entry> entries)
 {
-    beginResetModel();
+    if (entries.size() != entries_.size())
+    {
+        beginResetModel();
+        entries_ = std::move(entries);
+        endResetModel();
+        emit countChanged();
+        return;
+    }
+
+    bool changed = false;
+    for (std::size_t i = 0; i < entries.size(); ++i)
+    {
+        if (entries[i].steamId != entries_[i].steamId ||
+            entries[i].displayName != entries_[i].displayName ||
+            entries[i].avatar != entries_[i].avatar ||
+            entries[i].ping != entries_[i].ping ||
+            entries[i].relay != entries_[i].relay)
+        {
+            changed = true;
+            break;
+        }
+    }
+
+    if (!changed)
+    {
+        return;
+    }
+
     entries_ = std::move(entries);
-    endResetModel();
-    emit countChanged();
+    if (!entries_.empty())
+    {
+        emit dataChanged(index(0, 0), index(static_cast<int>(entries_.size()) - 1, 0));
+    }
 }

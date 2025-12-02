@@ -7,6 +7,7 @@
 #include <boost/asio.hpp>
 #include <memory>
 #include <thread>
+#include <unordered_map>
 
 #include "friends_model.h"
 #include "members_model.h"
@@ -95,8 +96,10 @@ private:
     int localPort_;
     int localBindPort_;
     int lastTcpClients_;
+    int lastMemberLogCount_;
     QVariantList friends_;
     FriendsModel friendsModel_;
     MembersModel membersModel_;
     QString friendFilter_;
+    std::unordered_map<uint64_t, QString> memberAvatars_;
 };
