@@ -590,8 +590,8 @@ ApplicationWindow {
                                 }
                                 Rectangle { Layout.fillWidth: true; color: "transparent" }
                                 Item {
-                                    width: 28
-                                    height: 28
+                                    implicitWidth: 28
+                                    implicitHeight: 28
                                     Layout.alignment: Qt.AlignVCenter
 
                                     BusyIndicator {
@@ -795,8 +795,8 @@ ApplicationWindow {
                     }
                     Rectangle { Layout.fillWidth: true; color: "transparent" }
                     Item {
-                        width: 28
-                        height: 28
+                        implicitWidth: 28
+                        implicitHeight: 28
                         Layout.alignment: Qt.AlignVCenter
 
                         BusyIndicator {

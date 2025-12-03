@@ -117,6 +117,10 @@ Backend::Backend(QObject *parent)
   connect(&slowTimer_, &QTimer::timeout, this, &Backend::refreshFriends);
   slowTimer_.start(5000);
 
+  friendsRefreshResetTimer_.setSingleShot(true);
+  connect(&friendsRefreshResetTimer_, &QTimer::timeout, this,
+          [this]() { setFriendsRefreshing(false); });
+
   connect(&cooldownTimer_, &QTimer::timeout, this, [this]() {
     bool anyChanged = false;
     int maxCooldown = 0;
@@ -464,7 +468,7 @@ void Backend::refreshFriends() {
     friends_ = updated;
     emit friendsChanged();
   }
-  QTimer::singleShot(0, this, [this]() { setFriendsRefreshing(false); });
+  friendsRefreshResetTimer_.start(1500);
 }
 
 void Backend::refreshLobbies() {

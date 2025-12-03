@@ -146,6 +146,7 @@ private:
   QTimer callbackTimer_;
   QTimer slowTimer_;
   QTimer cooldownTimer_;
+  QTimer friendsRefreshResetTimer_;
 
   bool steamReady_;
   QString status_;
