@@ -416,6 +416,7 @@ void Backend::startHosting() {
     if (!vpnManager_ || !vpnBridge_) {
       return;
     }
+    vpnWanted_ = true;
     vpnHosting_ = true;
     bool started = vpnBridge_->isRunning();
     if (!started) {
@@ -490,6 +491,7 @@ void Backend::ensureVpnSetup() {
 void Backend::stopVpn() {
   vpnConnected_ = false;
   vpnHosting_ = false;
+  vpnStartAttempted_ = false;
   tunLocalIp_.clear();
   tunDeviceName_.clear();
   if (vpnBridge_) {
@@ -556,6 +558,7 @@ void Backend::joinHost() {
     if (!vpnManager_ || !vpnBridge_) {
       return;
     }
+    vpnWanted_ = true;
     clearStatusOverride();
     const auto markNotFound = [this]() {
       setStatusOverride(tr("房间不存在。"));
@@ -646,6 +649,9 @@ void Backend::joinHost() {
 
   // 如果输入的是房间 ID，先加入房间再由回调发起 P2P 连接
   if (targetSteamID.IsLobby()) {
+    if (roomManager_ && roomManager_->getCurrentLobby().IsValid()) {
+      roomManager_->leaveLobby();
+    }
     if (roomManager_ && roomManager_->joinLobby(targetSteamID)) {
       updateStatus();
     } else {
@@ -671,6 +677,7 @@ void Backend::joinLobby(const QString &lobbyId) {
     if (!vpnManager_ || !vpnBridge_) {
       return;
     }
+    vpnWanted_ = true;
     const QString trimmedId = lobbyId.trimmed();
     bool ok = false;
     const uint64 idValue = trimmedId.toULongLong(&ok);
@@ -685,6 +692,9 @@ void Backend::joinLobby(const QString &lobbyId) {
     }
     if (isHost() || isConnected()) {
       disconnect();
+    }
+    if (roomManager_ && roomManager_->getCurrentLobby().IsValid()) {
+      roomManager_->leaveLobby();
     }
     setJoinTargetFromLobby(trimmedId);
     if (roomManager_ && roomManager_->joinLobby(lobby)) {
@@ -721,6 +731,9 @@ void Backend::joinLobby(const QString &lobbyId) {
   if (isHost() || isConnected()) {
     disconnect();
   }
+  if (roomManager_ && roomManager_->getCurrentLobby().IsValid()) {
+    roomManager_->leaveLobby();
+  }
 
   setJoinTargetFromLobby(trimmedId);
   if (roomManager_ && roomManager_->joinLobby(lobby)) {
@@ -739,9 +752,6 @@ void Backend::disconnect() {
     mySteamId = QString::number(SteamUser()->GetSteamID().ConvertToUint64());
   }
 
-  if (inTunMode()) {
-    stopVpn();
-  }
   if (roomManager_) {
     roomManager_->leaveLobby();
   }
@@ -768,6 +778,11 @@ void Backend::disconnect() {
     lobbiesModel_.removeByHostId(mySteamId);
   } else if (!prevLobbyId.isEmpty() && prevMemberCount > 0) {
     lobbiesModel_.adjustMemberCount(prevLobbyId, -1);
+  }
+
+  if (inTunMode()) {
+    vpnWanted_ = false;
+    stopVpn();
   }
 }
 
@@ -865,10 +880,14 @@ void Backend::setConnectionMode(int mode) {
   }
   if (next == ConnectionMode::Tcp) {
     stopVpn();
+    vpnWanted_ = false;
   }
   connectionMode_ = next;
   if (roomManager_) {
     roomManager_->setVpnMode(inTunMode(), vpnManager_.get());
+  }
+  if (next == ConnectionMode::Tun) {
+    vpnStartAttempted_ = false;
   }
   updateStatus();
   emit stateChanged();
@@ -885,9 +904,11 @@ void Backend::handleLobbyModeChanged(bool wantsTun, const CSteamID &lobby) {
   if (isHost()) {
     return;
   }
+  vpnWanted_ = true;
   connectionMode_ = ConnectionMode::Tun;
   ensureVpnSetup();
   roomManager_->setVpnMode(true, vpnManager_.get());
+  vpnStartAttempted_ = false;
   // Start TUN bridge immediately so the device appears for guests.
   if (vpnBridge_ && !vpnBridge_->isRunning()) {
     if (!vpnBridge_->start()) {
@@ -901,6 +922,31 @@ void Backend::handleLobbyModeChanged(bool wantsTun, const CSteamID &lobby) {
   syncVpnPeers();
   updateStatus();
   emit stateChanged();
+}
+
+void Backend::ensureVpnRunning() {
+  if (!inTunMode()) {
+    return;
+  }
+  if (!vpnWanted_) {
+    return;
+  }
+  ensureVpnSetup();
+  if (!vpnBridge_ || vpnBridge_->isRunning()) {
+    return;
+  }
+  if (vpnStartAttempted_) {
+    return;
+  }
+  vpnStartAttempted_ = true;
+  if (!vpnBridge_->start()) {
+    qWarning() << tr("无法启动 TUN 设备，请检查权限或驱动。");
+    vpnConnected_ = false;
+    return;
+  }
+  updateVpnInfo();
+  vpnConnected_ = true;
+  vpnHosting_ = vpnHosting_ && vpnConnected_;
 }
 
 void Backend::setRoomName(const QString &name) {
@@ -1075,6 +1121,7 @@ void Backend::tick() {
     steamManager_->update();
   }
   if (inTunMode()) {
+    ensureVpnRunning();
     syncVpnPeers();
     updateVpnInfo();
   }

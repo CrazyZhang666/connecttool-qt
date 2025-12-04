@@ -136,6 +136,7 @@ void SteamVpnNetworkingManager::addPeer(CSteamID peerID) {
   if (isNew) {
     SteamNetworkingIdentity identity;
     identity.SetSteamID(peerID);
+    messagesInterface_->AcceptSessionWithUser(identity);
     VpnMessageHeader hello{};
     hello.type = VpnMessageType::SESSION_HELLO;
     hello.length = 0;
@@ -285,11 +286,8 @@ void SteamVpnNetworkingManager::OnSessionRequest(
   std::cout << "[SteamVPN] Session request from "
             << remoteSteamID.ConvertToUint64() << std::endl;
   bool accept = false;
-  {
-    std::lock_guard<std::mutex> lock(peersMutex_);
-    accept = peers_.find(remoteSteamID) != peers_.end();
-  }
-  if (accept && messagesInterface_) {
+  accept = true;
+  if (messagesInterface_) {
     messagesInterface_->AcceptSessionWithUser(pCallback->m_identityRemote);
     std::cout << "[SteamVPN] Accepted session from known peer" << std::endl;
   }

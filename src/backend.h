@@ -158,6 +158,7 @@ private:
   void updateVpnInfo();
   bool inTunMode() const { return connectionMode_ == ConnectionMode::Tun; }
   bool inTcpMode() const { return connectionMode_ == ConnectionMode::Tcp; }
+  void ensureVpnRunning();
 
   std::unique_ptr<SteamNetworkingManager> steamManager_;
   std::unique_ptr<SteamVpnNetworkingManager> vpnManager_;
@@ -205,6 +206,8 @@ private:
   ConnectionMode connectionMode_ = ConnectionMode::Tcp;
   bool vpnHosting_ = false;
   bool vpnConnected_ = false;
+  bool vpnWanted_ = false;
+  bool vpnStartAttempted_ = false;
   QString tunLocalIp_;
   QString tunDeviceName_;
 };

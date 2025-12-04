@@ -19,6 +19,10 @@ public:
 
   virtual std::string get_device_name() const = 0;
   virtual bool set_ip(const std::string &ip, const std::string &netmask) = 0;
+  // Optionally install a route for the virtual subnet; return true if added or
+  // unsupported.
+  virtual bool add_route(const std::string &network,
+                         const std::string &netmask) = 0;
   virtual bool set_mtu(int mtu) = 0;
   virtual bool set_up(bool up) = 0;
   virtual bool set_non_blocking(bool nonBlocking) = 0;

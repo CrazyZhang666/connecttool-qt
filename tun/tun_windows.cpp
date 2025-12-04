@@ -299,6 +299,25 @@ public:
     return true;
   }
 
+  bool add_route(const std::string &network,
+                 const std::string &netmask) override {
+    // Best effort using route.exe; requires admin.
+    std::ostringstream cmd;
+    cmd << "route ADD " << network << " MASK " << netmask << " " << ip_
+        << " IF " << adapterIndex_ << " METRIC 1";
+    if (::system(cmd.str().c_str()) == 0) {
+      return true;
+    }
+    std::ostringstream cmdChange;
+    cmdChange << "route CHANGE " << network << " MASK " << netmask << " "
+              << ip_ << " IF " << adapterIndex_ << " METRIC 1";
+    if (::system(cmdChange.str().c_str()) == 0) {
+      return true;
+    }
+    setError("Failed to add route " + network);
+    return false;
+  }
+
   bool set_mtu(int mtu) override {
     if (!adapter_) {
       setError("Adapter not open");

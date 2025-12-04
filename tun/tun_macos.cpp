@@ -44,6 +44,23 @@ bool validAddress(const std::string &text) {
   }
   return true;
 }
+
+int maskToPrefix(const std::string &mask) {
+  in_addr addr{};
+  if (inet_pton(AF_INET, mask.c_str(), &addr) != 1) {
+    return -1;
+  }
+  uint32_t m = ntohl(addr.s_addr);
+  int prefix = 0;
+  while (m & 0x80000000) {
+    prefix++;
+    m <<= 1;
+  }
+  if (m != 0) {
+    return -1;
+  }
+  return prefix;
+}
 } // namespace
 
 class TunMacOS : public TunInterface {
@@ -171,6 +188,28 @@ public:
       return false;
     }
     return true;
+  }
+
+  bool add_route(const std::string &network,
+                 const std::string &netmask) override {
+    const int prefix = maskToPrefix(netmask);
+    const std::string cidr =
+        prefix > 0 ? network + "/" + std::to_string(prefix) : network;
+    // Point the subnet at this utun interface; best effort.
+    std::ostringstream cmd;
+    cmd << "/sbin/route -n add -net " << cidr << " -interface " << name_;
+    if (::system(cmd.str().c_str()) == 0) {
+      return true;
+    }
+    // Try to change existing route if add failed (e.g., already present).
+    std::ostringstream cmdChange;
+    cmdChange << "/sbin/route -n change -net " << cidr << " -interface "
+              << name_;
+    if (::system(cmdChange.str().c_str()) == 0) {
+      return true;
+    }
+    lastError_ = "route add/change failed for " + network;
+    return false;
   }
 
   bool set_mtu(int mtu) override {

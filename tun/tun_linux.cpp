@@ -38,6 +38,23 @@ int openControlSocket(std::string &error) {
   }
   return sock;
 }
+
+int maskToPrefix(const std::string &mask) {
+  in_addr addr{};
+  if (inet_pton(AF_INET, mask.c_str(), &addr) != 1) {
+    return -1;
+  }
+  uint32_t m = ntohl(addr.s_addr);
+  int prefix = 0;
+  while (m & 0x80000000) {
+    prefix++;
+    m <<= 1;
+  }
+  if (m != 0) {
+    return -1;
+  }
+  return prefix;
+}
 } // namespace
 
 class TunLinux : public TunInterface {
@@ -155,6 +172,32 @@ public:
 
     ::close(sock);
     return true;
+  }
+
+  bool add_route(const std::string &network,
+                 const std::string &netmask) override {
+    const int prefix = maskToPrefix(netmask);
+    const std::string cidr =
+        prefix > 0 ? network + "/" + std::to_string(prefix) : network;
+    // Best-effort: add or replace a connected route via ip(8)
+    std::string cmd = "ip route replace " + cidr + " dev " + name_ +
+                      " proto static 2>/dev/null";
+    if (::system(cmd.c_str()) == 0) {
+      return true;
+    }
+    // Fallback: try classic route add/change, ignore if it already exists.
+    cmd = "route add -net " + network + " netmask " + netmask + " dev " +
+          name_ + " 2>/dev/null";
+    if (::system(cmd.c_str()) == 0) {
+      return true;
+    }
+    cmd = "route change -net " + network + " netmask " + netmask + " dev " +
+          name_ + " 2>/dev/null";
+    if (::system(cmd.c_str()) == 0) {
+      return true;
+    }
+    lastError_ = "Failed to add route " + network;
+    return false;
   }
 
   bool set_mtu(int mtu) override {

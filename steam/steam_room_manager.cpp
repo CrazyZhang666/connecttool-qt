@@ -417,11 +417,8 @@ bool SteamRoomManager::searchLobbies() {
 }
 
 bool SteamRoomManager::joinLobby(CSteamID lobbyID) {
-  if (SteamMatchmaking()->JoinLobby(lobbyID) != k_EResultOK) {
-    std::cerr << "Failed to join lobby" << std::endl;
-    return false;
-  }
-  // Connection will be handled by callback
+  SteamMatchmaking()->JoinLobby(lobbyID);
+  // Connection result will be delivered asynchronously via OnLobbyEntered.
   return true;
 }
 

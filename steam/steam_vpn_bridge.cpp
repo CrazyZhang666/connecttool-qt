@@ -168,7 +168,16 @@ void SteamVpnBridge::tunReadThread() {
       const uint32_t vpnPacketSize =
           static_cast<uint32_t>(sizeof(VpnMessageHeader) + totalPayloadSize);
 
-      if (isBroadcastAddress(destIP)) {
+      if (destIP == localIP_) {
+        // Loopback traffic destined to our own TUN IP back into the stack.
+        tunDevice_->write(buffer, static_cast<size_t>(bytesRead));
+        std::lock_guard<std::mutex> lock(statsMutex_);
+        stats_.packetsReceived++;
+        stats_.bytesReceived += static_cast<uint64_t>(bytesRead);
+        std::cout << "[SteamVPN] Local loopback " << ipToString(srcIP) << " -> "
+                  << ipToString(destIP) << " (" << bytesRead << " bytes)"
+                  << std::endl;
+      } else if (isBroadcastAddress(destIP)) {
         steamManager_->broadcastMessage(
             vpnPacket, vpnPacketSize,
             k_nSteamNetworkingSend_UnreliableNoNagle |
@@ -177,6 +186,9 @@ void SteamVpnBridge::tunReadThread() {
         std::lock_guard<std::mutex> lock(statsMutex_);
         stats_.packetsSent += peers.size();
         stats_.bytesSent += static_cast<uint64_t>(bytesRead) * peers.size();
+        std::cout << "[SteamVPN] Broadcast " << ipToString(srcIP) << " -> "
+                  << ipToString(destIP) << " to " << peers.size()
+                  << " peers (" << bytesRead << " bytes)" << std::endl;
       } else {
         CSteamID targetSteamID;
         bool found = false;
@@ -186,6 +198,15 @@ void SteamVpnBridge::tunReadThread() {
           if (it != routingTable_.end() && !it->second.isLocal) {
             targetSteamID = it->second.steamID;
             found = true;
+          } else if (it != routingTable_.end() && it->second.isLocal) {
+            // Target is ourselves; loop back.
+            tunDevice_->write(buffer, static_cast<size_t>(bytesRead));
+            std::lock_guard<std::mutex> lock2(statsMutex_);
+            stats_.packetsReceived++;
+            stats_.bytesReceived += static_cast<uint64_t>(bytesRead);
+            std::cout << "[SteamVPN] Route loopback " << ipToString(srcIP)
+                      << " -> " << ipToString(destIP) << " (" << bytesRead
+                      << " bytes)" << std::endl;
           }
         }
         if (found) {
@@ -196,6 +217,10 @@ void SteamVpnBridge::tunReadThread() {
           std::lock_guard<std::mutex> lock(statsMutex_);
           stats_.packetsSent++;
           stats_.bytesSent += static_cast<uint64_t>(bytesRead);
+          std::cout << "[SteamVPN] Sent " << ipToString(srcIP) << " -> "
+                    << ipToString(destIP) << " (" << bytesRead
+                    << " bytes) to " << targetSteamID.ConvertToUint64()
+                    << std::endl;
         }
       }
     }
@@ -375,6 +400,14 @@ void SteamVpnBridge::onUserLeft(CSteamID steamID) {
       ++it;
     }
   }
+  if (SteamUser() && steamID == SteamUser()->GetSteamID()) {
+    running_ = false;
+    heartbeatManager_.stop();
+    if (tunDevice_) {
+      tunDevice_->close();
+    }
+    localIP_ = 0;
+  }
 }
 
 SteamVpnBridge::Statistics SteamVpnBridge::getStatistics() const {
@@ -389,6 +422,16 @@ void SteamVpnBridge::onNegotiationSuccess(uint32_t ipAddress,
   const std::string subnetMaskStr = ipToString(subnetMask_);
   if (tunDevice_->set_ip(localIPStr, subnetMaskStr) &&
       tunDevice_->set_up(true)) {
+    // Install a connected route for the virtual subnet so the OS sends traffic
+    // into the TUN device.
+    const uint32_t networkIp = baseIP_ & subnetMask_;
+    const std::string networkStr = ipToString(networkIp);
+    if (!tunDevice_->add_route(networkStr, subnetMaskStr)) {
+      std::cerr << "Failed to add route to subnet " << networkStr << "/"
+                << subnetMaskStr << " via " << tunDevice_->get_device_name()
+                << std::endl;
+    }
+
     const CSteamID mySteamID = SteamUser()->GetSteamID();
     updateRoute(nodeId, mySteamID, localIP_, SteamFriends()
                                                 ? SteamFriends()->GetPersonaName()
