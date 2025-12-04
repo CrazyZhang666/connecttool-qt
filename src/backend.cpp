@@ -19,12 +19,18 @@
 #include <algorithm>
 #include <chrono>
 #include <isteamnetworkingutils.h>
+#ifdef Q_OS_LINUX
+#include <pwd.h>
+#include <sys/types.h>
+#include <unistd.h>
+#endif
 #include <mutex>
 #include <sstream>
 #include <steam_api.h>
 #include <steamnetworkingtypes.h>
 #include <unordered_set>
 #include <set>
+#include <vector>
 #include <utility>
 
 namespace {
@@ -78,6 +84,58 @@ void steamNetDebugHook(ESteamNetworkingSocketsDebugOutputType /*type*/,
                        const char *msg) {
   qDebug() << "[SteamNet]" << msg;
 }
+
+#ifdef Q_OS_LINUX
+// When the app is launched with sudo while Steam runs under a normal user,
+// SteamAPI_Init will look in root's home (e.g. /root/.steam) and think Steam
+// is not running. Prefer the invoking user's home/runtime if available.
+void fixSteamEnvForSudo() {
+  if (geteuid() != 0) {
+    return;
+  }
+  const QByteArray sudoUser = qgetenv("SUDO_USER");
+  const QByteArray sudoHomeEnv = qgetenv("SUDO_HOME");
+  if (sudoUser.isEmpty() && sudoHomeEnv.isEmpty()) {
+    return;
+  }
+
+  QByteArray targetHome = sudoHomeEnv;
+  uid_t targetUid = 0;
+  if (targetHome.isEmpty() && !sudoUser.isEmpty()) {
+    struct passwd pwd {};
+    struct passwd *result = nullptr;
+    long bufsize = sysconf(_SC_GETPW_R_SIZE_MAX);
+    if (bufsize < 0) {
+      bufsize = 16384;
+    }
+    std::vector<char> buffer(static_cast<size_t>(bufsize));
+    if (getpwnam_r(sudoUser.constData(), &pwd, buffer.data(),
+                   buffer.size(), &result) == 0 &&
+        result != nullptr && result->pw_dir != nullptr) {
+      targetHome = QByteArray(result->pw_dir);
+      targetUid = result->pw_uid;
+    }
+  } else if (!sudoUser.isEmpty()) {
+    if (struct passwd *pwd = getpwnam(sudoUser.constData())) {
+      targetUid = pwd->pw_uid;
+    }
+  }
+
+  if (!targetHome.isEmpty() && qgetenv("HOME") != targetHome) {
+    qputenv("HOME", targetHome);
+  }
+
+  if (targetUid != 0 && qEnvironmentVariableIsEmpty("XDG_RUNTIME_DIR")) {
+    QByteArray runtime =
+        QByteArray("/run/user/") +
+        QByteArray::number(static_cast<unsigned long long>(targetUid));
+    // Only set it if the path exists; otherwise leave as-is.
+    if (access(runtime.constData(), R_OK | X_OK) == 0) {
+      qputenv("XDG_RUNTIME_DIR", runtime);
+    }
+  }
+}
+#endif
 } // namespace
 
 Backend::Backend(QObject *parent)
@@ -87,6 +145,10 @@ Backend::Backend(QObject *parent)
   // Set a default app id so Steam can bootstrap in development environments
   qputenv("SteamAppId", QByteArray("480"));
   qputenv("SteamGameId", QByteArray("480"));
+
+#ifdef Q_OS_LINUX
+  fixSteamEnvForSudo();
+#endif
 
   steamReady_ = SteamAPI_Init();
   if (!steamReady_) {
