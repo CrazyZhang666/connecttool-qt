@@ -109,6 +109,7 @@ Backend::Backend(QObject *parent)
   }
 
   roomManager_ = std::make_unique<SteamRoomManager>(steamManager_.get());
+  steamManager_->setRoomManager(roomManager_.get());
   roomManager_->setLobbyName(roomName_.toStdString());
   roomManager_->setPublishLobby(publishLobby_);
   roomManager_->setLobbyListCallback(
@@ -644,25 +645,34 @@ void Backend::addFriend(const QString &steamId) {
 
   const bool overlayEnabled =
       SteamUtils() && SteamUtils()->IsOverlayEnabled();
+  bool overlayInvoked = false;
   if (overlayEnabled) {
     qDebug() << "[Friends] opening overlay friendadd"
              << target.ConvertToUint64();
     SteamFriends()->ActivateGameOverlayToUser("friendadd", target);
+    overlayInvoked = true;
   } else {
     qDebug() << "[Friends] overlay disabled or unavailable";
   }
 
-  const QUrl profileUrl(
-      QStringLiteral("https://steamcommunity.com/profiles/%1/").arg(steamId));
-  const bool opened = QDesktopServices::openUrl(profileUrl);
-  qDebug() << "[Friends] fallback openUrl (profile)" << profileUrl
-           << "opened:" << opened;
+  bool openedProfile = false;
+  if (!overlayInvoked) {
+    const QUrl profileUrl(
+        QStringLiteral("https://steamcommunity.com/profiles/%1/").arg(steamId));
+    openedProfile = QDesktopServices::openUrl(profileUrl);
+    qDebug() << "[Friends] fallback openUrl (profile)" << profileUrl
+             << "opened:" << openedProfile;
+  }
 
-  qWarning()
-      << (overlayEnabled
-              ? tr("已尝试打开 Steam 添加好友窗口；同时在浏览器中打开了对方个人主页。")
-              : tr("已在浏览器中打开对方 Steam 个人主页，请在网页中添加好友。"));
-  setStatusOverride(tr("正在打开 Steam 个人主页…"), 2000);
+  if (overlayInvoked) {
+    qWarning() << tr("已尝试打开 Steam 添加好友窗口。");
+  } else {
+    qWarning()
+        << tr("已在浏览器中打开对方 Steam 个人主页，请在网页中添加好友。");
+    if (openedProfile) {
+      setStatusOverride(tr("正在打开 Steam 个人主页…"), 2000);
+    }
+  }
 }
 
 void Backend::updateFriendCooldown(const QString &steamId, int seconds) {
