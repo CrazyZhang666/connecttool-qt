@@ -2,13 +2,19 @@
 
 #include "tun_interface.h"
 
-#include <cstdlib>
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
+#endif
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+
+#include <winsock2.h>
+#include <windows.h>
+#include <ws2tcpip.h>
 #include <iphlpapi.h>
 #include <netioapi.h>
 #include <rpc.h>
-#include <windows.h>
-#include <winsock2.h>
-#include <ws2tcpip.h>
+#include <cstdlib>
 #include <atomic>
 #include <iostream>
 #include <sstream>
@@ -135,7 +141,7 @@ class TunWindows : public TunInterface {
 public:
   TunWindows()
       : adapter_(nullptr), session_(nullptr), mtu_(1500), nonBlocking_(false),
-        readReady_(false) {
+        adapterIndex_(0), readReady_(false) {
     std::memset(&adapterLuid_, 0, sizeof(adapterLuid_));
   }
   ~TunWindows() override { close(); }
@@ -296,21 +302,27 @@ public:
       return false;
     }
     std::cout << "Set IP address: " << ip << "/" << prefixLength << std::endl;
+    lastConfiguredIp_ = ip;
+    ConvertInterfaceLuidToIndex(&adapterLuid_, &adapterIndex_);
     return true;
   }
 
   bool add_route(const std::string &network,
                  const std::string &netmask) override {
     // Best effort using route.exe; requires admin.
+    if (lastConfiguredIp_.empty() || adapterIndex_ == 0) {
+      setError("Adapter IP/index not set for routing");
+      return false;
+    }
     std::ostringstream cmd;
-    cmd << "route ADD " << network << " MASK " << netmask << " " << ip_
-        << " IF " << adapterIndex_ << " METRIC 1";
+    cmd << "route ADD " << network << " MASK " << netmask << " "
+        << lastConfiguredIp_ << " IF " << adapterIndex_ << " METRIC 1";
     if (::system(cmd.str().c_str()) == 0) {
       return true;
     }
     std::ostringstream cmdChange;
     cmdChange << "route CHANGE " << network << " MASK " << netmask << " "
-              << ip_ << " IF " << adapterIndex_ << " METRIC 1";
+              << lastConfiguredIp_ << " IF " << adapterIndex_ << " METRIC 1";
     if (::system(cmdChange.str().c_str()) == 0) {
       return true;
     }
@@ -403,9 +415,11 @@ private:
   WINTUN_SESSION_HANDLE session_;
   std::string deviceName_;
   std::string lastError_;
+  std::string lastConfiguredIp_;
   int mtu_;
   bool nonBlocking_;
   NET_LUID adapterLuid_;
+  ULONG adapterIndex_;
   std::atomic<bool> readReady_;
 };
 
