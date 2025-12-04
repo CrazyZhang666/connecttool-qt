@@ -27,6 +27,9 @@ void VpnMessageHandler::start() {
     return;
   }
   running_ = true;
+  if (ioContext_ == internalIoContext_.get() && internalIoContext_) {
+    internalIoContext_->restart();
+  }
   pollTimer_ = std::make_unique<boost::asio::steady_timer>(*ioContext_);
   schedulePoll();
   if (ioContext_ == internalIoContext_.get()) {
@@ -42,6 +45,11 @@ void VpnMessageHandler::stop() {
   running_ = false;
   if (pollTimer_) {
     pollTimer_->cancel();
+    // If we're using an external io_context (shared with the app), drain the
+    // canceled handler now so it doesn't fire after this object is destroyed.
+    if (ioContext_ && ioContext_ != internalIoContext_.get()) {
+      ioContext_->poll();
+    }
   }
   if (ioContext_ == internalIoContext_.get() && internalIoContext_) {
     internalIoContext_->stop();

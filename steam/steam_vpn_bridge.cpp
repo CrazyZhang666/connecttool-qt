@@ -388,6 +388,8 @@ void SteamVpnBridge::handleVpnMessage(const uint8_t *data, size_t length,
 
 void SteamVpnBridge::onUserJoined(CSteamID steamID) {
   if (ipNegotiator_.getState() == NegotiationState::STABLE) {
+    std::cout << "[SteamVPN] New peer joined, sending address/route: "
+              << steamID.ConvertToUint64() << std::endl;
     ipNegotiator_.sendAddressAnnounceTo(steamID);
     sendRouteUpdateTo(steamID);
   }
@@ -417,6 +419,15 @@ void SteamVpnBridge::onUserLeft(CSteamID steamID) {
 SteamVpnBridge::Statistics SteamVpnBridge::getStatistics() const {
   std::lock_guard<std::mutex> lock(statsMutex_);
   return stats_;
+}
+
+void SteamVpnBridge::rebroadcastState() {
+  if (ipNegotiator_.getState() != NegotiationState::STABLE) {
+    return;
+  }
+  std::cout << "[SteamVPN] Rebroadcasting address and routes" << std::endl;
+  ipNegotiator_.sendAddressAnnounce();
+  broadcastRouteUpdate();
 }
 
 void SteamVpnBridge::onNegotiationSuccess(uint32_t ipAddress,
@@ -514,6 +525,8 @@ void SteamVpnBridge::broadcastRouteUpdate() {
     std::memcpy(message.data() + sizeof(VpnMessageHeader), routeData.data(),
                 routeData.size());
   }
+  std::cout << "[SteamVPN] Broadcasting route update with "
+            << (routeData.size() / 12) << " entries" << std::endl;
   steamManager_->broadcastMessage(message.data(),
                                   static_cast<uint32_t>(message.size()),
                                   k_nSteamNetworkingSend_Reliable);
@@ -544,6 +557,9 @@ void SteamVpnBridge::sendRouteUpdateTo(CSteamID targetSteamID) {
     std::memcpy(message.data() + sizeof(VpnMessageHeader), routeData.data(),
                 routeData.size());
   }
+  std::cout << "[SteamVPN] Sending route update to "
+            << targetSteamID.ConvertToUint64() << " with "
+            << (routeData.size() / 12) << " entries" << std::endl;
   steamManager_->sendMessageToUser(targetSteamID, message.data(),
                                    static_cast<uint32_t>(message.size()),
                                    k_nSteamNetworkingSend_Reliable);

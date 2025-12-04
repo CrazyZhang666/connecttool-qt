@@ -34,6 +34,8 @@ public:
                         CSteamID senderSteamID);
   void onUserJoined(CSteamID steamID);
   void onUserLeft(CSteamID steamID);
+  // Force-send our current address/route to all peers (used after reconnect).
+  void rebroadcastState();
 
   struct Statistics {
     uint64_t packetsSent = 0;

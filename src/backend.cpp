@@ -434,6 +434,7 @@ void Backend::startHosting() {
     }
     if (roomManager_ && roomManager_->startHosting()) {
       vpnConnected_ = true;
+      vpnBridge_->rebroadcastState();
       updateStatus();
     } else {
       qWarning() << tr("创建房间失败，请检查 Steam 状态。");
@@ -499,17 +500,14 @@ void Backend::stopVpn() {
   tunLocalIp_.clear();
   tunDeviceName_.clear();
   if (vpnManager_) {
-    vpnManager_->setVpnBridge(nullptr);
-    vpnManager_->clearPeers();
     vpnManager_->stopMessageHandler();
+    vpnManager_->clearPeers();
   }
   if (vpnBridge_) {
     vpnBridge_->stop();
   }
-  vpnBridge_.reset();
-  vpnManager_.reset();
   if (roomManager_) {
-    roomManager_->setVpnMode(false, nullptr);
+    roomManager_->setVpnMode(false, vpnManager_.get());
   }
 }
 
@@ -593,21 +591,22 @@ void Backend::joinHost() {
     }
     if (targetSteamID.IsLobby()) {
       setJoinTargetFromLobby(trimmedTarget);
-      if (roomManager_ && roomManager_->joinLobby(targetSteamID)) {
-        if (!vpnBridge_->isRunning()) {
-          if (!vpnBridge_->start()) {
-            qWarning() << tr("无法启动 TUN 设备，请检查权限或驱动。");
-            return;
-          }
-          updateVpnInfo();
+    if (roomManager_ && roomManager_->joinLobby(targetSteamID)) {
+      if (!vpnBridge_->isRunning()) {
+        if (!vpnBridge_->start()) {
+          qWarning() << tr("无法启动 TUN 设备，请检查权限或驱动。");
+          return;
         }
-        vpnHosting_ = false;
-        vpnConnected_ = true;
-        updateStatus();
-      } else {
-        qWarning() << tr("无法加入房间。");
+        updateVpnInfo();
       }
-      return;
+      vpnHosting_ = false;
+      vpnConnected_ = true;
+      vpnBridge_->rebroadcastState();
+      updateStatus();
+    } else {
+      qWarning() << tr("无法加入房间。");
+    }
+    return;
     }
     if (targetSteamID.BIndividualAccount()) {
       if (!vpnBridge_->isRunning()) {
@@ -717,6 +716,7 @@ void Backend::joinLobby(const QString &lobbyId) {
       }
       vpnHosting_ = false;
       vpnConnected_ = true;
+      vpnBridge_->rebroadcastState();
       updateStatus();
     } else {
       qWarning() << tr("无法加入房间。");
