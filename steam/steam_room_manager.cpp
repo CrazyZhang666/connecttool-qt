@@ -17,6 +17,7 @@ constexpr const char *kLobbyTagValue = "1";
 constexpr const char *kPingPrefix = "PING|";
 constexpr const char *kLobbyModeTun = "tun";
 constexpr const char *kLobbyModeTcp = "tcp";
+constexpr int kLobbyMaxMembers = 250; // Allow more than the default 4 slots
 } // namespace
 
 SteamFriendsCallbacks::SteamFriendsCallbacks(SteamNetworkingManager *manager,
@@ -370,7 +371,7 @@ SteamRoomManager::~SteamRoomManager() {
 
 bool SteamRoomManager::createLobby() {
   SteamAPICall_t hSteamAPICall =
-      SteamMatchmaking()->CreateLobby(k_ELobbyTypePublic, 4);
+      SteamMatchmaking()->CreateLobby(k_ELobbyTypePublic, kLobbyMaxMembers);
   if (hSteamAPICall == k_uAPICallInvalid) {
     std::cerr << "Failed to create lobby" << std::endl;
     return false;
