@@ -23,6 +23,7 @@ ApplicationWindow {
     property var navItems: [
         { key: "room", title: qsTr("房间"), subtitle: qsTr("主持或加入到房间") },
         { key: "lobby", title: qsTr("大厅"), subtitle: qsTr("浏览房间列表") },
+        { key: "node", title: qsTr("节点"), subtitle: qsTr("中继延迟与切换") },
         { key: "about", title: qsTr("关于"), subtitle: qsTr("关于 ConnectTool") }
     ]
 
@@ -475,217 +476,217 @@ ApplicationWindow {
                         Layout.fillHeight: true
                         spacing: 16
 
-                    Frame {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        padding: 16
-                        Material.elevation: 6
-                        background: Rectangle { radius: 12; color: "#111827"; border.color: "#1f2b3c" }
-
-                        ColumnLayout {
-                            anchors.fill: parent
+                        Frame {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            spacing: 12
+                            padding: 16
+                            Material.elevation: 6
+                            background: Rectangle { radius: 12; color: "#111827"; border.color: "#1f2b3c" }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                spacing: 10
-                                Label {
-                                    text: qsTr("房间成员")
-                                    font.pixelSize: 18
-                                    color: "#e6efff"
-                                }
-                                Rectangle { Layout.fillWidth: true; color: "transparent" }
-                            }
-
-                            Item {
+                            ColumnLayout {
+                                anchors.fill: parent
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
-                                Layout.preferredHeight: 320
+                                spacing: 12
 
-                                Flickable {
-                                    id: memberFlick
-                                    anchors.fill: parent
-                                    anchors.margins: 6
-                                    clip: true
-                                    interactive: contentHeight > height
-                                    contentHeight: membersColumn.implicitHeight
-                                    ScrollBar.vertical: ScrollBar {}
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+                                    Label {
+                                        text: qsTr("房间成员")
+                                        font.pixelSize: 18
+                                        color: "#e6efff"
+                                    }
+                                    Rectangle { Layout.fillWidth: true; color: "transparent" }
+                                }
 
-                                    Column {
-                                        id: membersColumn
-                                        width: parent.width
-                                        spacing: 12
-                                        Repeater {
-                                            id: memberRepeater
-                                            model: backend.membersModel
-                                            delegate: Rectangle {
-                                                required property string displayName
-                                                required property string steamId
-                                                required property string avatar
-                                                required property string ip
-                                                required property var ping
-                                                required property string relay
-                                                required property bool isFriend
+                                Item {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    Layout.preferredHeight: 320
 
-                                                radius: 10
-                                                color: "#162033"
-                                                border.color: "#1f2f45"
-                                                width: parent ? parent.width : 0
-                                                // 高度由内部布局决定，并增加一些内边距
-                                                implicitHeight: rowLayout.implicitHeight + 24
+                                    Flickable {
+                                        id: memberFlick
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        clip: true
+                                        interactive: contentHeight > height
+                                        contentHeight: membersColumn.implicitHeight
+                                        ScrollBar.vertical: ScrollBar {}
 
-                                                RowLayout {
-                                                    id: rowLayout
-                                                    anchors.fill: parent
-                                                    anchors.margins: 12
-                                                    spacing: 12
+                                        Column {
+                                            id: membersColumn
+                                            width: parent.width
+                                            spacing: 12
+                                            Repeater {
+                                                id: memberRepeater
+                                                model: backend.membersModel
+                                                delegate: Rectangle {
+                                                    required property string displayName
+                                                    required property string steamId
+                                                    required property string avatar
+                                                    required property string ip
+                                                    required property var ping
+                                                    required property string relay
+                                                    required property bool isFriend
 
-                                                    // --- 1. 头像区域 (保持不变) ---
-                                                    Item {
-                                                        width: 48
-                                                        height: 48
-                                                        Layout.alignment: Qt.AlignVCenter
-                                                        Layout.preferredWidth: 48
-                                                        Layout.preferredHeight: 48
-                                                        Rectangle {
-                                                            id: memberAvatarFrame
-                                                            anchors.fill: parent
-                                                            radius: width / 2
-                                                            color: avatar.length > 0 ? "transparent" : "#1a2436"
-                                                            border.color: avatar.length > 0 ? "transparent" : "#1f2f45"
-                                                            layer.enabled: avatar.length > 0
-                                                            layer.effect: OpacityMask {
-                                                                source: memberAvatarFrame
-                                                                maskSource: Rectangle {
-                                                                    width: memberAvatarFrame.width
-                                                                    height: memberAvatarFrame.height
-                                                                    radius: memberAvatarFrame.width / 2
-                                                                    color: "white"
+                                                    radius: 10
+                                                    color: "#162033"
+                                                    border.color: "#1f2f45"
+                                                    width: parent ? parent.width : 0
+                                                    // 高度由内部布局决定，并增加一些内边距
+                                                    implicitHeight: rowLayout.implicitHeight + 24
+
+                                                    RowLayout {
+                                                        id: rowLayout
+                                                        anchors.fill: parent
+                                                        anchors.margins: 12
+                                                        spacing: 12
+
+                                                        // --- 1. 头像区域 (保持不变) ---
+                                                        Item {
+                                                            width: 48
+                                                            height: 48
+                                                            Layout.alignment: Qt.AlignVCenter
+                                                            Layout.preferredWidth: 48
+                                                            Layout.preferredHeight: 48
+                                                            Rectangle {
+                                                                id: memberAvatarFrame
+                                                                anchors.fill: parent
+                                                                radius: width / 2
+                                                                color: avatar.length > 0 ? "transparent" : "#1a2436"
+                                                                border.color: avatar.length > 0 ? "transparent" : "#1f2f45"
+                                                                layer.enabled: avatar.length > 0
+                                                                layer.effect: OpacityMask {
+                                                                    source: memberAvatarFrame
+                                                                    maskSource: Rectangle {
+                                                                        width: memberAvatarFrame.width
+                                                                        height: memberAvatarFrame.height
+                                                                        radius: memberAvatarFrame.width / 2
+                                                                        color: "white"
+                                                                    }
+                                                                }
+                                                                Image {
+                                                                    anchors.fill: parent
+                                                                    source: avatar
+                                                                    visible: avatar.length > 0
+                                                                    fillMode: Image.PreserveAspectCrop
+                                                                    smooth: true
+                                                                }
+                                                                Label {
+                                                                    anchors.centerIn: parent
+                                                                    visible: avatar.length === 0
+                                                                    text: displayName.length > 0 ? displayName[0] : "?"
+                                                                    color: "#6f7e9c"
+                                                                    font.pixelSize: 18
                                                                 }
                                                             }
-                                                            Image {
-                                                                anchors.fill: parent
-                                                                source: avatar
-                                                                visible: avatar.length > 0
-                                                                fillMode: Image.PreserveAspectCrop
-                                                                smooth: true
-                                                            }
-                                                            Label {
-                                                                anchors.centerIn: parent
-                                                                visible: avatar.length === 0
-                                                                text: displayName.length > 0 ? displayName[0] : "?"
-                                                                color: "#6f7e9c"
-                                                                font.pixelSize: 18
-                                                            }
                                                         }
-                                                    }
 
-                                                    // --- 2. 用户信息列 (保持不变) ---
-                                                    ColumnLayout {
-                                                        spacing: 4
-                                                        Layout.fillWidth: false // 不要占满，只占需要宽度
-                                                        Layout.alignment: Qt.AlignVCenter // 垂直居中
+                                                        // --- 2. 用户信息列 (保持不变) ---
+                                                        ColumnLayout {
+                                                            spacing: 4
+                                                            Layout.fillWidth: false // 不要占满，只占需要宽度
+                                                            Layout.alignment: Qt.AlignVCenter // 垂直居中
 
-                                                        RowLayout {
-                                                            spacing: 8
+                                                            RowLayout {
+                                                                spacing: 8
+                                                                Label {
+                                                                    text: displayName
+                                                                    font.pixelSize: 16
+                                                                    color: "#e1edff"
+                                                                    elide: Text.ElideRight
+                                                                }
+                                                                Rectangle {
+                                                                    radius: 8
+                                                                    color: "#142033"
+                                                                    border.color: isFriend ? "#23c9a9" : "#ef476f"
+                                                                    implicitHeight: 22
+                                                                    implicitWidth: relationLabel.implicitWidth + 14
+                                                                    Layout.alignment: Qt.AlignVCenter
+                                                                    Label {
+                                                                        id: relationLabel
+                                                                        anchors.centerIn: parent
+                                                                        text: isFriend ? qsTr("好友") : qsTr("陌生人")
+                                                                        color: isFriend ? "#23c9a9" : "#ef476f"
+                                                                        font.pixelSize: 11
+                                                                    }
+                                                                }
+                                                            }
                                                             Label {
-                                                                text: displayName
-                                                                font.pixelSize: 16
-                                                                color: "#e1edff"
+                                                                text: qsTr("SteamID: %1").arg(steamId)
+                                                                font.pixelSize: 12
+                                                                color: "#7f8cab"
                                                                 elide: Text.ElideRight
                                                             }
-                                                            Rectangle {
-                                                                radius: 8
-                                                                color: "#142033"
-                                                                border.color: isFriend ? "#23c9a9" : "#ef476f"
-                                                                implicitHeight: 22
-                                                                implicitWidth: relationLabel.implicitWidth + 14
-                                                                Layout.alignment: Qt.AlignVCenter
-                                                                Label {
-                                                                    id: relationLabel
-                                                                    anchors.centerIn: parent
-                                                                    text: isFriend ? qsTr("好友") : qsTr("陌生人")
-                                                                    color: isFriend ? "#23c9a9" : "#ef476f"
-                                                                    font.pixelSize: 11
-                                                                }
+                                                            Label {
+                                                                visible: backend.connectionMode === 1
+                                                                text: qsTr("IP: %1").arg(ip && ip.length > 0 ? ip : qsTr("-"))
+                                                                font.pixelSize: 12
+                                                                color: "#7f8cab"
+                                                                elide: Text.ElideRight
                                                             }
                                                         }
-                                                        Label {
-                                                            text: qsTr("SteamID: %1").arg(steamId)
-                                                            font.pixelSize: 12
-                                                            color: "#7f8cab"
-                                                            elide: Text.ElideRight
+
+                                                        // --- 3. 关键占位符 (Spacer) ---
+                                                        // 这个 Item 会占据中间所有剩余空间，把后面的 Ping 和 按钮 推到最右边
+                                                        Item {
+                                                            Layout.fillWidth: true
                                                         }
-                                                        Label {
-                                                            visible: backend.connectionMode === 1
-                                                            text: qsTr("IP: %1").arg(ip && ip.length > 0 ? ip : qsTr("-"))
-                                                            font.pixelSize: 12
-                                                            color: "#7f8cab"
-                                                            elide: Text.ElideRight
+
+                                                        Button {
+                                                            visible: !isFriend
+                                                            text: qsTr("添加好友")
+                                                            Layout.alignment: Qt.AlignVCenter
+                                                            onClicked: backend.addFriend(steamId)
                                                         }
-                                                    }
 
-                                                    // --- 3. 关键占位符 (Spacer) ---
-                                                    // 这个 Item 会占据中间所有剩余空间，把后面的 Ping 和 按钮 推到最右边
-                                                    Item {
-                                                        Layout.fillWidth: true
-                                                    }
-
-                                                    Button {
-                                                        visible: !isFriend
-                                                        text: qsTr("添加好友")
-                                                        Layout.alignment: Qt.AlignVCenter
-                                                        onClicked: backend.addFriend(steamId)
-                                                    }
-
-                                                    Button {
-                                                        visible: backend.connectionMode === 1 && ip && ip.length > 0
-                                                        text: qsTr("复制 IP")
-                                                        flat: true
-                                                        Layout.alignment: Qt.AlignVCenter
-                                                        onClicked: backend.copyToClipboard(ip)
-                                                    }
-
-                                                    // --- 4. Ping 信息列 ---
-                                                    ColumnLayout {
-                                                        spacing: 2
-                                                        Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
-                                                        Label {
-                                                            text: (ping === undefined || ping === null) ? qsTr("-") : qsTr("%1 ms").arg(ping)
-                                                            color: "#7fded1"
-                                                            font.pixelSize: 14
-                                                            horizontalAlignment: Text.AlignRight
-                                                            Layout.alignment: Qt.AlignRight
+                                                        Button {
+                                                            visible: backend.connectionMode === 1 && ip && ip.length > 0
+                                                            text: qsTr("复制 IP")
+                                                            flat: true
+                                                            Layout.alignment: Qt.AlignVCenter
+                                                            onClicked: backend.copyToClipboard(ip)
                                                         }
-                                                        Label {
-                                                            text: relay.length > 0 ? relay : "-"
-                                                            color: "#8ea4c8"
-                                                            font.pixelSize: 12
-                                                            horizontalAlignment: Text.AlignRight
-                                                            Layout.alignment: Qt.AlignRight
-                                                        }
-                                                    }
 
-                                                    // --- 5. 按钮区域 (移动到这里) ---
-                                                    // 直接放在 RowLayout 中，它们会自动排列在 Ping 信息右侧
+                                                        // --- 4. Ping 信息列 ---
+                                                        ColumnLayout {
+                                                            spacing: 2
+                                                            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                                                            Label {
+                                                                text: (ping === undefined || ping === null) ? qsTr("-") : qsTr("%1 ms").arg(ping)
+                                                                color: "#7fded1"
+                                                                font.pixelSize: 14
+                                                                horizontalAlignment: Text.AlignRight
+                                                                Layout.alignment: Qt.AlignRight
+                                                            }
+                                                            Label {
+                                                                text: relay.length > 0 ? relay : "-"
+                                                                color: "#8ea4c8"
+                                                                font.pixelSize: 12
+                                                                horizontalAlignment: Text.AlignRight
+                                                                Layout.alignment: Qt.AlignRight
+                                                            }
+                                                        }
+
+                                                        // --- 5. 按钮区域 (移动到这里) ---
+                                                        // 直接放在 RowLayout 中，它们会自动排列在 Ping 信息右侧
+                                                    }
                                                 }
                                             }
                                         }
                                     }
-                                }
 
-                                Column {
-                                    visible: memberRepeater.count === 0
-                                    anchors.centerIn: parent
-                                    spacing: 6
-                                    Label { text: qsTr("暂无成员"); color: "#8090b3" }
-                                    Label { text: qsTr("创建房间或等待邀请即可出现。"); color: "#62708f"; font.pixelSize: 12 }
+                                    Column {
+                                        visible: memberRepeater.count === 0
+                                        anchors.centerIn: parent
+                                        spacing: 6
+                                        Label { text: qsTr("暂无成员"); color: "#8090b3" }
+                                        Label { text: qsTr("创建房间或等待邀请即可出现。"); color: "#62708f"; font.pixelSize: 12 }
+                                    }
                                 }
                             }
                         }
-                    }
 
                         Frame {
                             id: chatFrame
@@ -1232,10 +1233,10 @@ ApplicationWindow {
                                                         Layout.fillWidth: true
                                                         Label {
                                                             text: name.length > 0
-                                                                  ? name
-                                                                  : (hostName.length > 0
-                                                                     ? qsTr("%1 的房间").arg(hostName)
-                                                                     : qsTr("未命名房间"))
+                                                            ? name
+                                                            : (hostName.length > 0
+                                                            ? qsTr("%1 的房间").arg(hostName)
+                                                            : qsTr("未命名房间"))
                                                             font.pixelSize: 16
                                                             color: "#e1edff"
                                                             elide: Text.ElideRight
@@ -1338,6 +1339,229 @@ ApplicationWindow {
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            visible: win.currentPage === "node"
+            opacity: visible ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.InOutQuad } }
+            id: nodePage
+            property bool isWindows: Qt.platform.os === "windows"
+
+            RowLayout {
+                anchors.fill: parent
+                spacing: 12
+
+                Frame {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: parent.width * 0.55
+                    padding: 16
+                    Material.elevation: 6
+                    background: Rectangle { radius: 12; color: "#111827"; border.color: "#1f2b3c" }
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("中继节点延迟")
+                            font.pixelSize: 20
+                            color: "#e6efff"
+                        }
+                        Label {
+                            text: qsTr("展示当前 Steam 环境下的中继 POP 往返延迟估计值。")
+                            color: "#8ea4c8"
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 140
+                            radius: 12
+                            color: "#162033"
+                            border.color: "#1f2b3c"
+
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 16
+                                spacing: 8
+
+                                Label {
+                                    text: backend.relayPing >= 0 ? qsTr("%1 ms").arg(backend.relayPing)
+                                    : qsTr("未获取")
+                                    color: backend.relayPing >= 0 ? "#7fded1" : "#7f8cab"
+                                    font.pixelSize: 38
+                                    font.bold: true
+                                }
+
+                                Label {
+                                    text: backend.relayPing >= 0
+                                    ? qsTr("每 2 秒自动刷新，取最优中继的双向往返时延估算。")
+                                    : qsTr("需要 Steam 运行后才能探测中继延迟。")
+                                    color: "#9ab6e3"
+                                    font.pixelSize: 13
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+
+                        Label {
+                            text: qsTr("可用中继节点（%1 个）").arg(backend.relayPops.length)
+                            color: "#8ea4c8"
+                            font.pixelSize: 13
+                        }
+
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredHeight: 280
+
+                            ListView {
+                                id: relayList
+                                anchors.fill: parent
+                                anchors.margins: 6
+                                model: backend.relayPops
+                                clip: true
+                                spacing: 10
+                                ScrollBar.vertical: ScrollBar {}
+
+                                delegate: Rectangle {
+                                    width: relayList.width
+                                    radius: 10
+                                    color: "#162033"
+                                    border.color: "#1f2f45"
+                                    implicitHeight: 64
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 10
+
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Layout.fillWidth: true
+                                            Label {
+                                                text: modelData.name
+                                                color: "#e1edff"
+                                                font.pixelSize: 15
+                                                elide: Text.ElideRight
+                                            }
+                                            Label {
+                                                visible: modelData.via !== undefined && modelData.via.length > 0
+                                                text: qsTr("经由 %1").arg(modelData.via)
+                                                color: "#7f8cab"
+                                                font.pixelSize: 12
+                                            }
+                                        }
+
+                                        Item { Layout.fillWidth: true }
+
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
+                                            Label {
+                                                text: modelData.ping >= 0 ? qsTr("%1 ms").arg(modelData.ping) : qsTr("-")
+                                                color: modelData.ping < 0 ? "#7f8cab"
+                                                : (modelData.ping <= 100 ? "#2dd6c1"
+                                                : (modelData.ping <= 200 ? "#f9c74f" : "#ef476f"))
+                                                font.pixelSize: 16
+                                            }
+                                            Label {
+                                                text: modelData.ping >= 0 ? qsTr("往返估计") : qsTr("不可达")
+                                                color: "#9ab6e3"
+                                                font.pixelSize: 11
+                                                horizontalAlignment: Text.AlignRight
+                                                Layout.alignment: Qt.AlignRight
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 6
+                                visible: relayList.count === 0
+                                Label { text: qsTr("暂无中继节点数据"); color: "#8090b3" }
+                                Label { text: qsTr("等待 Steam 网络初始化或正在探测中…"); color: "#62708f"; font.pixelSize: 12 }
+                            }
+                        }
+                    }
+                }
+
+                Frame {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    // 修复 1: 减小宽度比例 (0.45 -> 0.43)，为中间的 spacing (12px) 留出空间
+                    Layout.preferredWidth: parent.width * 0.43
+                    padding: 16
+                    Material.elevation: 6
+                    background: Rectangle { radius: 12; color: "#111827"; border.color: "#1f2b3c" }
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        spacing: 12
+
+                        Label {
+                            text: qsTr("Steam 切换")
+                            font.pixelSize: 20
+                            color: "#e6efff"
+                        }
+                        Label {
+                            text: qsTr("仅 Windows 生效：为 Steam.exe 启动添加或移除 \"-steamchina\" 参数。")
+                            color: "#8ea4c8"
+                            font.pixelSize: 13
+                            wrapMode: Text.WordWrap
+                            // 修复 2: 显式设置填满宽度，确保文本能根据面板宽度正确换行
+                            Layout.fillWidth: true
+                        }
+
+                        RowLayout {
+                            id: steamSwitchRow
+                            Layout.fillWidth: true
+                            spacing: 10
+
+                            Button {
+                                text: qsTr("国际版启动")
+                                enabled: nodePage.isWindows
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                onClicked: backend.launchSteam(false)
+                            }
+
+                            Button {
+                                text: qsTr("蒸汽平台 (-steamchina)")
+                                enabled: nodePage.isWindows
+                                Layout.fillWidth: true
+                                Layout.alignment: Qt.AlignVCenter
+                                onClicked: backend.launchSteam(true)
+                            }
+                        }
+
+                        Label {
+                            text: nodePage.isWindows
+                            ? qsTr("如果 Steam 已在运行，将尝试以对应参数重新唤起。")
+                            : qsTr("当前平台不支持自动切换，按钮已禁用。")
+                            color: "#7f8cab"
+                            font.pixelSize: 12
+                            wrapMode: Text.WordWrap
+                            // 修复 3: 底部提示文本也需要宽度约束
+                            Layout.fillWidth: true
+                        }
+
+                        // 修复 4: 添加一个透明填充项，占据底部剩余的空白高度
+                        // 这能保证上方的内容始终靠顶对齐，不会因为高度拉伸而出现奇怪的垂直分布
+                        Item { Layout.fillHeight: true }
+                    }
+                }
+
+            }
+        }
+
+        Item {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
             visible: win.currentPage === "about"
             opacity: visible ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: 500; easing.type: Easing.InOutQuad } }
@@ -1434,7 +1658,7 @@ ApplicationWindow {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: Qt.openUrlExternally("https://qm.qq.com/q/616325806")
+                                onClicked: Qt.openUrlExternally("https://qm.qq.com/q/hgAZJYasbS")
                             }
                         }
                         Rectangle {
@@ -1502,7 +1726,7 @@ ApplicationWindow {
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: Qt.openUrlExternally("https://qm.qq.com/q/902943118")
+                                onClicked: Qt.openUrlExternally("https://qm.qq.com/q/Kx6WpGxlE4")
                             }
                         }
                         ColumnLayout {
