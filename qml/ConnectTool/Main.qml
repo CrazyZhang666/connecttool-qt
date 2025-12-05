@@ -696,7 +696,10 @@ ApplicationWindow {
                                         spacing: 12
                                         clip: true
                                         ScrollBar.vertical: ScrollBar {}
-                                        onCountChanged: positionViewAtEnd()
+                                        onCountChanged: chatFrame.scrollToBottom()
+                                        onModelChanged: chatFrame.scrollToBottom()
+                                        onContentHeightChanged: chatFrame.scrollToBottom()
+                                        Component.onCompleted: chatFrame.scrollToBottom()
 
                                         delegate: Item {
                                             required property string displayName
@@ -839,6 +842,10 @@ ApplicationWindow {
                                 backend.sendChatMessage(chatInput.text);
                                 chatInput.text = "";
                                 chatInput.forceActiveFocus();
+                            }
+
+                            function scrollToBottom() {
+                                Qt.callLater(function() { chatList.positionViewAtEnd(); });
                             }
                         }
                     }
