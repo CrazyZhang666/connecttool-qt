@@ -55,6 +55,7 @@ signals:
   void pinnedChanged();
 
 private:
+  std::optional<int> findPinnedEntryIndex() const;
   void updatePinnedFlags();
 
   static bool sameMessage(const Entry &a, const Entry &b);

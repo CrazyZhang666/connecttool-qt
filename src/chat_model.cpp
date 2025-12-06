@@ -1,5 +1,7 @@
 #include "chat_model.h"
 
+#include <cstdlib>
+
 ChatModel::ChatModel(QObject *parent) : QAbstractListModel(parent) {}
 
 int ChatModel::rowCount(const QModelIndex &parent) const {
@@ -119,15 +121,44 @@ QVariantMap ChatModel::pinnedMessage() const {
   return map;
 }
 
+std::optional<int> ChatModel::findPinnedEntryIndex() const {
+  if (!pinnedEntry_ || entries_.empty()) {
+    return std::nullopt;
+  }
+
+  const Entry &pinned = *pinnedEntry_;
+  std::optional<int> bestIndex;
+  qint64 bestDelta = 0;
+
+  for (size_t i = 0; i < entries_.size(); ++i) {
+    const Entry &entry = entries_[i];
+    if (entry.steamId != pinned.steamId || entry.message != pinned.message) {
+      continue;
+    }
+    if (!entry.timestamp.isValid() || !pinned.timestamp.isValid()) {
+      return static_cast<int>(i);
+    }
+    const qint64 delta =
+        std::llabs(pinned.timestamp.msecsTo(entry.timestamp));
+    if (!bestIndex || delta < bestDelta) {
+      bestDelta = delta;
+      bestIndex = static_cast<int>(i);
+    }
+  }
+
+  return bestIndex;
+}
+
 void ChatModel::updatePinnedFlags() {
   if (entries_.empty()) {
     return;
   }
+  const std::optional<int> pinnedRow = findPinnedEntryIndex();
   std::vector<int> changedRows;
   changedRows.reserve(entries_.size());
   for (size_t i = 0; i < entries_.size(); ++i) {
     bool shouldPin =
-        pinnedEntry_.has_value() && sameMessage(entries_[i], *pinnedEntry_);
+        pinnedRow.has_value() && static_cast<int>(i) == pinnedRow.value();
     if (entries_[i].pinned != shouldPin) {
       entries_[i].pinned = shouldPin;
       changedRows.push_back(static_cast<int>(i));
