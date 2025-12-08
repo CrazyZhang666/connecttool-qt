@@ -108,6 +108,6 @@ void SoundNotifier::playMessageAlert() {
   }
 
   cs_sound_params_t params = cs_sound_params_default();
-  params.volume = 1.0f;
+  params.volume = alertVolume_;
   cs_play_sound(alertAudio_, params);
 }
