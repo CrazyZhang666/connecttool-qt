@@ -118,6 +118,7 @@ private:
   int consecutiveBadIceSamples_ = 0;
   std::chrono::steady_clock::time_point lastRelayFallback_;
   std::chrono::steady_clock::time_point lastIceTimeout_;
+  std::chrono::steady_clock::time_point connectAttemptStart_;
 
   // Callback
   static void OnSteamNetConnectionStatusChanged(

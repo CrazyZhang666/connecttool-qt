@@ -24,7 +24,7 @@ SteamNetworkingManager::SteamNetworkingManager()
       io_context_(nullptr), server_(nullptr), localPort_(nullptr),
       localBindPort_(nullptr), messageHandler_(nullptr),
       roomManager_(nullptr), relayFallbackPending_(false),
-      relayFallbackTried_(false) {}
+      relayFallbackTried_(false), connectAttemptStart_() {}
 
 SteamNetworkingManager::~SteamNetworkingManager() {
   stopMessageHandler();
@@ -184,6 +184,7 @@ bool SteamNetworkingManager::connectToHostInternal(
       identity, 0, optionCount, optionCount > 0 ? options : nullptr);
 
   if (g_hConnection != k_HSteamNetConnection_Invalid) {
+    connectAttemptStart_ = std::chrono::steady_clock::now();
     std::cout << "Attempting to connect to host "
               << hostSteamID.ConvertToUint64() << " with virtual port " << 0;
     if (relayOnly) {
@@ -221,6 +222,7 @@ void SteamNetworkingManager::disconnect() {
     m_pInterface->CloseConnection(g_hConnection, 0, nullptr, false);
     g_hConnection = k_HSteamNetConnection_Invalid;
   }
+  connectAttemptStart_ = {};
 
   // Close all host connections
   for (auto conn : connections) {
@@ -319,7 +321,32 @@ void SteamNetworkingManager::update() {
       SteamNetConnectionRealTimeStatus_t status;
       if (m_pInterface->GetConnectionRealTimeStatus(g_hConnection, &status,
                                                     0, nullptr)) {
+        const auto now = std::chrono::steady_clock::now();
         hostPing_ = status.m_nPing;
+
+        // If we're still stuck in route-finding for too long, fall back to relay.
+        if (g_isClient && !relayFallbackTried_ &&
+            (status.m_eState ==
+                 k_ESteamNetworkingConnectionState_FindingRoute ||
+             status.m_eState ==
+                 k_ESteamNetworkingConnectionState_Connecting) &&
+            connectAttemptStart_.time_since_epoch().count() > 0 &&
+            now - connectAttemptStart_ > std::chrono::seconds(5)) {
+          std::cout << "[SteamNet] ICE route slow, retrying via relay-only"
+                    << std::endl;
+          connectionToClose = g_hConnection;
+          g_hConnection = k_HSteamNetConnection_Invalid;
+          g_isConnected = false;
+          relayFallbackPending_ = false;
+          relayFallbackTried_ = true;
+          shouldRetryRelay = true;
+          retryTarget = g_hostSteamID;
+          connectAttemptStart_ = {};
+          consecutiveBadIceSamples_ = 0;
+          lastIceTimeout_ = {};
+          lastRelayFallback_ = now;
+        }
+
         if (g_isClient &&
             status.m_eState == k_ESteamNetworkingConnectionState_Connected) {
           const bool badQuality = status.m_nPing <= 0 ||
@@ -327,7 +354,6 @@ void SteamNetworkingManager::update() {
                                   status.m_flConnectionQualityRemote < 0.2f;
           consecutiveBadIceSamples_ = badQuality ? (consecutiveBadIceSamples_ + 1)
                                                  : 0;
-          const auto now = std::chrono::steady_clock::now();
           if (badQuality && consecutiveBadIceSamples_ >= 120 &&
               !relayFallbackTried_ && g_hostSteamID.IsValid() &&
               (lastRelayFallback_.time_since_epoch().count() == 0 ||
@@ -501,9 +527,16 @@ void SteamNetworkingManager::handleConnectionStatusChanged(
           failedWhileConnecting &&
           std::strstr(pInfo->m_info.m_szEndDebug,
                       "Timed out attempting to connect") != nullptr;
+      const char *debug = pInfo->m_info.m_szEndDebug;
+      const bool endToEndTimeout =
+          debug && std::strstr(debug, "end-to-end timeout") != nullptr;
+      const bool natTraversalFailed =
+          debug && (std::strstr(debug, "NAT traversal") != nullptr ||
+                    std::strstr(debug, "Timed out attempting to connect") !=
+                        nullptr);
 
-      if (failedWhileConnecting && g_isClient && !relayFallbackTried_ &&
-          g_hostSteamID.IsValid()) {
+      if (g_isClient && !relayFallbackTried_ && g_hostSteamID.IsValid() &&
+          (failedWhileConnecting || endToEndTimeout || natTraversalFailed)) {
         relayFallbackPending_ = true;
         std::cout << "[SteamNet] Queued relay-only retry after ICE failure"
                   << std::endl;
@@ -592,6 +625,7 @@ void SteamNetworkingManager::handleConnectionStatusChanged(
                    k_ESteamNetworkingConnectionState_ProblemDetectedLocally) {
       g_isConnected = false;
       g_hConnection = k_HSteamNetConnection_Invalid;
+      connectAttemptStart_ = {};
       // Remove from connections
       auto it =
           std::find(connections.begin(), connections.end(), pInfo->m_hConn);
