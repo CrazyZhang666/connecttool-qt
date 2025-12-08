@@ -317,8 +317,15 @@ void SteamNetworkingManager::update() {
     }
 
     if (relayFallbackPending_ && !relayFallbackTried_ && g_isClient &&
-        g_hConnection == k_HSteamNetConnection_Invalid &&
         g_hostSteamID.IsValid()) {
+      // Tear down the stuck ICE attempt so we can try relay-only immediately.
+      if (g_hConnection != k_HSteamNetConnection_Invalid) {
+        m_pInterface->CloseConnection(g_hConnection, 0,
+                                      "Retry via relay after ICE timeout",
+                                      false);
+        g_hConnection = k_HSteamNetConnection_Invalid;
+        g_isConnected = false;
+      }
       shouldRetryRelay = true;
       retryTarget = g_hostSteamID;
       relayFallbackPending_ = false;

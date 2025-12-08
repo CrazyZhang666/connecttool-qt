@@ -250,10 +250,8 @@ ApplicationWindow {
                     opacity: menuButton.enabled ? 1.0 : 0.4
                 }
                 background: Rectangle {
-                    anchors.fill: parent
-                    radius: width / 2
-                    color: menuButton.hovered ? "#1c293c" : "#161f2e"
-                    border.color: "#243149"
+                    color: "transparent"
+                    border.width: 0
                 }
                 Layout.alignment: Qt.AlignVCenter
                 Accessible.name: qsTr("打开导航")
