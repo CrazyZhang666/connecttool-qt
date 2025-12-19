@@ -116,7 +116,7 @@ add_executable(connecttool-qt
     steam/steam_vpn_bridge.cpp)
 
 if(WIN32)
-    target_sources(connecttool-qt PRIVATE tun/tun_windows.cpp)
+    target_sources(connecttool-qt PRIVATE tun/tun_windows.cpp src/firewall_windows.cpp)
 elseif(APPLE)
     target_sources(connecttool-qt PRIVATE tun/tun_macos.cpp)
 else()

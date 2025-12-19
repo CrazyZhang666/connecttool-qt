@@ -1,5 +1,6 @@
 #include "tcp_server.h"
 #include "../steam/steam_networking_manager.h"
+#include "firewall_windows.h"
 #include <iostream>
 #include <algorithm>
 
@@ -14,6 +15,16 @@ bool TCPServer::start() {
         acceptor_.set_option(tcp::acceptor::reuse_address(true));
         acceptor_.bind(endpoint);
         acceptor_.listen();
+
+#if defined(_WIN32)
+        if (!ensureTcpFirewallRule("ConnectTool TCP inbound", port_)) {
+            std::cerr << "Failed to add firewall rule for TCP port " << port_
+                      << std::endl;
+        } else {
+            std::cout << "Added firewall rule for TCP port " << port_
+                      << std::endl;
+        }
+#endif
 
         running_ = true;
         serverThread_ = std::thread([this]() { 

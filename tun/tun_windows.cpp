@@ -1,6 +1,7 @@
 #ifdef _WIN32
 
 #include "tun_interface.h"
+#include "firewall_windows.h"
 
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0601
@@ -381,37 +382,14 @@ public:
   }
 
 private:
-  static std::string escape_ps(const std::string &value) {
-    std::string escaped;
-    escaped.reserve(value.size());
-    for (char c : value) {
-      if (c == '\'') {
-        escaped += "''";
-      } else {
-        escaped.push_back(c);
-      }
-    }
-    return escaped;
-  }
-
   void ensureFirewallRule() const {
     if (deviceName_.empty()) {
       return;
     }
-    const std::string ruleName = "ConnectTool TUN inbound";
-    const std::string escapedName = escape_ps(ruleName);
-    const std::string escapedAlias = escape_ps(deviceName_);
-    std::ostringstream ps;
-    ps << "powershell -Command \"$ErrorActionPreference='SilentlyContinue'; "
-       << "Remove-NetFirewallRule -DisplayName '" << escapedName
-       << "' -ErrorAction SilentlyContinue; "
-       << "New-NetFirewallRule -DisplayName '" << escapedName
-       << "' -Direction Inbound -Action Allow -Protocol Any "
-       << "-InterfaceAlias '" << escapedAlias << "' -Enabled True\"";
-    const int rc = ::system(ps.str().c_str());
-    if (rc != 0) {
+    const char *ruleName = "ConnectTool TUN inbound";
+    if (!ensureTunFirewallRule(ruleName, deviceName_.c_str())) {
       std::cerr << "Failed to add firewall rule for " << deviceName_
-                << " (rc=" << rc << ")" << std::endl;
+                << std::endl;
     } else {
       std::cout << "Added firewall rule for interface " << deviceName_
                 << std::endl;

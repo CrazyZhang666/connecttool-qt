@@ -6,6 +6,7 @@
 #include "../steam/steam_utils.h"
 #include "../steam/steam_vpn_bridge.h"
 #include "../steam/steam_vpn_networking_manager.h"
+#include "firewall_windows.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -224,6 +225,7 @@ QString stripGhProxyPrefix(const QString &url) {
   }
   return url;
 }
+
 } // namespace
 
 Backend::Backend(QObject *parent)
@@ -627,6 +629,15 @@ void Backend::startHosting() {
 
   if (roomManager_ && roomManager_->startHosting()) {
     steamManager_->setHostSteamID(SteamUser()->GetSteamID());
+#ifdef Q_OS_WIN
+    if (localPort_ > 0) {
+      if (!ensureTcpFirewallRule("ConnectTool TCP forward", localPort_)) {
+        qWarning() << "Failed to add firewall rule for TCP port" << localPort_;
+      } else {
+        qInfo() << "Added firewall rule for TCP port" << localPort_;
+      }
+    }
+#endif
     updateStatus();
     refreshLobbies();
   } else {
