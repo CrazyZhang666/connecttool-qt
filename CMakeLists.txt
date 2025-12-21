@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Network)
 
 # Read version from git tag if available
-set(CONNECTTOOL_VERSION "1.5.9")
+set(CONNECTTOOL_VERSION "1.5.11")
 if(DEFINED ENV{CONNECTTOOL_VERSION})
     set(CONNECTTOOL_VERSION "$ENV{CONNECTTOOL_VERSION}")
 endif()
@@ -217,6 +217,7 @@ qt_add_qml_module(connecttool-qt
         qml/ConnectTool/GitHub.svg
         qml/ConnectTool/QQ.svg
         qml/ConnectTool/Menu.svg
+        qml/ConnectTool/AppIcon.png
         qml/ConnectTool/notify.wav)
 
 target_compile_definitions(connecttool-qt PRIVATE CONNECTTOOL_VERSION="${CONNECTTOOL_VERSION}")

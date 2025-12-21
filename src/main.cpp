@@ -5,6 +5,7 @@
 
 #include <QCoreApplication>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QOperatingSystemVersion>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -26,6 +27,7 @@ int main(int argc, char *argv[]) {
 #endif
 
   QGuiApplication app(argc, argv);
+  app.setWindowIcon(QIcon(QStringLiteral(":/qt/qml/ConnectTool/AppIcon.png")));
   QQuickStyle::setStyle(QStringLiteral("Material"));
 
   qmlRegisterUncreatableType<FriendsModel>("ConnectTool", 1, 0, "FriendsModel",

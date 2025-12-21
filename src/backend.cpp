@@ -166,7 +166,162 @@ QString renderPopId(SteamNetworkingPOPID pop) {
       .toUpper();
 }
 
+#ifdef Q_OS_WIN
+QString normalizePathForCompare(const QString &path) {
+  return QDir::cleanPath(QDir::fromNativeSeparators(path)).toLower();
+}
+
+QString findSteamInstallDir() {
+  QStringList candidates;
+  const auto addCandidate = [&candidates](const QString &path) {
+    if (!path.isEmpty()) {
+      candidates.push_back(path);
+    }
+  };
+
+  {
+    QSettings steamReg("HKEY_CURRENT_USER\\Software\\Valve\\Steam",
+                       QSettings::NativeFormat);
+    addCandidate(steamReg.value(QStringLiteral("SteamPath")).toString());
+    const QString steamExe =
+        steamReg.value(QStringLiteral("SteamExe")).toString();
+    if (!steamExe.isEmpty()) {
+      addCandidate(QFileInfo(steamExe).absolutePath());
+    }
+  }
+  {
+    QSettings steamReg("HKEY_LOCAL_MACHINE\\Software\\Valve\\Steam",
+                       QSettings::NativeFormat);
+    addCandidate(steamReg.value(QStringLiteral("InstallPath")).toString());
+  }
+  {
+    QSettings steamReg("HKEY_LOCAL_MACHINE\\Software\\WOW6432Node\\Valve\\Steam",
+                       QSettings::NativeFormat);
+    addCandidate(steamReg.value(QStringLiteral("InstallPath")).toString());
+  }
+
+  const QString programFiles = qEnvironmentVariable("ProgramFiles");
+  if (!programFiles.isEmpty()) {
+    addCandidate(QDir(programFiles).filePath(QStringLiteral("Steam")));
+  }
+  const QString programFiles86 = qEnvironmentVariable("ProgramFiles(x86)");
+  if (!programFiles86.isEmpty()) {
+    addCandidate(QDir(programFiles86).filePath(QStringLiteral("Steam")));
+  }
+
+  const bool want64 = (sizeof(void *) == 8);
+  const QString preferredDll =
+      want64 ? QStringLiteral("steamclient64.dll")
+             : QStringLiteral("steamclient.dll");
+  const QString fallbackDll =
+      want64 ? QStringLiteral("steamclient.dll")
+             : QStringLiteral("steamclient64.dll");
+
+  for (const QString &candidate : candidates) {
+    const QString dir =
+        QDir::cleanPath(QDir::fromNativeSeparators(candidate));
+    if (dir.isEmpty()) {
+      continue;
+    }
+    if (QFileInfo::exists(QDir(dir).filePath(preferredDll))) {
+      return dir;
+    }
+  }
+
+  for (const QString &candidate : candidates) {
+    const QString dir =
+        QDir::cleanPath(QDir::fromNativeSeparators(candidate));
+    if (dir.isEmpty()) {
+      continue;
+    }
+    if (QFileInfo::exists(QDir(dir).filePath(fallbackDll))) {
+      return dir;
+    }
+  }
+
+  for (const QString &candidate : candidates) {
+    const QString dir =
+        QDir::cleanPath(QDir::fromNativeSeparators(candidate));
+    if (dir.isEmpty()) {
+      continue;
+    }
+    if (QFileInfo::exists(QDir(dir).filePath(QStringLiteral("steam.exe")))) {
+      return dir;
+    }
+  }
+
+  return QString();
+}
+
+// Help SteamAPI_Init locate steamclient.dll by adding the Steam install
+// directory to DLL search paths.
+void fixSteamEnvForWindows() {
+  const QString steamDir = findSteamInstallDir();
+  if (steamDir.isEmpty()) {
+    return;
+  }
+
+  const QString normalizedSteam = normalizePathForCompare(steamDir);
+  const QString currentPath = QString::fromLocal8Bit(qgetenv("PATH"));
+  const QStringList pathEntries =
+      currentPath.split(';', Qt::SkipEmptyParts);
+  bool hasSteam = false;
+  for (const QString &entry : pathEntries) {
+    if (normalizePathForCompare(entry) == normalizedSteam) {
+      hasSteam = true;
+      break;
+    }
+  }
+  if (!hasSteam) {
+    const QString newPath =
+        QDir::toNativeSeparators(steamDir) +
+        QStringLiteral(";") +
+        currentPath;
+    qputenv("PATH", newPath.toLocal8Bit());
+  }
+
+  const std::wstring wideDir =
+      QDir::toNativeSeparators(steamDir).toStdWString();
+  SetDllDirectoryW(wideDir.c_str());
+}
+#endif
+
 #ifdef Q_OS_LINUX
+bool steamClientExistsInHome(const QString &homePath) {
+  if (homePath.isEmpty()) {
+    return false;
+  }
+  const QDir homeDir(homePath);
+  const QString steamClient64 =
+      homeDir.filePath(QStringLiteral(".steam/sdk64/steamclient.so"));
+  const QString steamClient32 =
+      homeDir.filePath(QStringLiteral(".steam/sdk32/steamclient.so"));
+  return QFileInfo::exists(steamClient64) || QFileInfo::exists(steamClient32);
+}
+
+// Prefer Steam's Flatpak data directory when the standard ~/.steam path is
+// missing (e.g. com.valvesoftware.Steam). This helps SteamAPI_Init locate both
+// steamclient.so and the running client IPC files.
+void fixSteamEnvForFlatpak() {
+  const QByteArray currentHome = qgetenv("HOME");
+  if (currentHome.isEmpty()) {
+    return;
+  }
+  const QString currentHomePath = QString::fromLocal8Bit(currentHome);
+  if (steamClientExistsInHome(currentHomePath)) {
+    return;
+  }
+
+  const QString flatpakHome =
+      QDir(currentHomePath)
+          .filePath(QStringLiteral(".var/app/com.valvesoftware.Steam"));
+  if (!steamClientExistsInHome(flatpakHome)) {
+    return;
+  }
+
+  qputenv("HOME", flatpakHome.toLocal8Bit());
+}
+
 // When the app is launched with sudo while Steam runs under a normal user,
 // SteamAPI_Init will look in root's home (e.g. /root/.steam) and think Steam
 // is not running. Prefer the invoking user's home/runtime if available.
@@ -238,8 +393,12 @@ Backend::Backend(QObject *parent)
   qputenv("SteamGameId", QByteArray("480"));
   updateStatusText_.clear();
 
+#ifdef Q_OS_WIN
+  fixSteamEnvForWindows();
+#endif
 #ifdef Q_OS_LINUX
   fixSteamEnvForSudo();
+  fixSteamEnvForFlatpak();
 #endif
 
   workGuard_ = std::make_unique<
@@ -456,6 +615,13 @@ bool Backend::tryInitializeSteam() {
   // Clean up any partial state before retrying.
   steamManager_.reset();
   roomManager_.reset();
+
+#ifdef Q_OS_WIN
+  fixSteamEnvForWindows();
+#endif
+#ifdef Q_OS_LINUX
+  fixSteamEnvForFlatpak();
+#endif
 
   steamReady_ = SteamAPI_Init();
   if (!steamReady_) {
