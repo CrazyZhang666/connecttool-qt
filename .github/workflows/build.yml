@@ -205,9 +205,106 @@ jobs:
           name: connecttool-qt-windows-x86_64
           path: ${{ steps.package.outputs.artifact_dir }}
           if-no-files-found: error
+  build-macos:
+    runs-on: macos-13
+    name: Build (macOS)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Setup Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v3
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: "6.10.1"
+          arch: clang_64
+          modules: qt5compat qtshadertools
+          cache: true
+      - name: Install Boost headers
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! brew list boost >/dev/null 2>&1; then
+            brew install boost
+          fi
+          boost_prefix="$(brew --prefix boost)"
+          echo "BOOST_ROOT=$boost_prefix" >> "$GITHUB_ENV"
+          echo "BOOST_INCLUDEDIR=$boost_prefix/include" >> "$GITHUB_ENV"
+      - name: Download Steamworks SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_URL="${{ secrets.STEAMWORKS_SDK_URL }}"
+          if [[ -z "$SDK_URL" ]]; then
+            echo "::error::STEAMWORKS_SDK_URL secret not set"
+            exit 1
+          fi
+          rm -rf steamworks steamworks_temp steamworks_sdk.zip
+          curl -fSLo steamworks_sdk.zip "$SDK_URL"
+          unzip -q steamworks_sdk.zip -d steamworks_temp
+          mkdir -p steamworks
+          if [[ -d "steamworks_temp/sdk" ]]; then
+            cp -R steamworks_temp/sdk/. steamworks/
+          else
+            cp -R steamworks_temp/. steamworks/
+          fi
+          rm -rf steamworks_sdk.zip steamworks_temp
+      - name: Verify Steamworks SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          header="steamworks/public/steam/steam_api.h"
+          if [[ ! -f "$header" ]]; then
+            echo "::error::Steamworks SDK headers not found at $header"
+            exit 1
+          fi
+          lib="steamworks/redistributable_bin/osx/libsteam_api.dylib"
+          if [[ ! -f "$lib" ]]; then
+            echo "::error::Steamworks redistributable not found at $lib"
+            exit 1
+          fi
+      - name: Configure CMake
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE="${{ env.BUILD_TYPE }}" \
+            -DCMAKE_PREFIX_PATH="${{ env.Qt6_DIR }}" \
+            -DCMAKE_OSX_ARCHITECTURES=x86_64
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+      - name: Deploy Qt runtime (macOS)
+        shell: bash
+        run: |
+          set -euo pipefail
+          macdeployqt "build/connecttool-qt.app" \
+            -qmldir="${{ github.workspace }}/qml" \
+            -verbose=2
+      - name: Create DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg_dir="${{ github.workspace }}/dist/dmg"
+          rm -rf "$dmg_dir"
+          mkdir -p "$dmg_dir"
+          cp -R "build/connecttool-qt.app" "$dmg_dir/"
+          ln -s /Applications "$dmg_dir/Applications"
+          hdiutil create \
+            -volname "ConnectTool" \
+            -srcfolder "$dmg_dir" \
+            -ov -format UDZO \
+            "dist/connecttool-qt-macos-x86_64.dmg"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: connecttool-qt-macos-x86_64
+          path: dist/connecttool-qt-macos-x86_64.dmg
+          if-no-files-found: error
   release:
     name: Publish Release
-    needs: build
+    needs: [build, build-macos]
     runs-on: ubuntu-latest
     if: github.ref_type == 'tag'
     steps:
@@ -229,6 +326,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
-          files: dist/**/*.zip
+          files: |
+            dist/**/*.zip
+            dist/**/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
