@@ -43,18 +43,19 @@ jobs:
           modules: qt5compat qtshadertools
           cache: true
       - name: Download Boost headers
-        shell: bash
+        shell: pwsh
         run: |
-          set -euo pipefail
-          BOOST_VERSION_UNDERSCORE="${BOOST_VERSION//./_}"
-          BOOST_URL="https://archives.boost.io/release/${BOOST_VERSION}/source/boost_${BOOST_VERSION_UNDERSCORE}.tar.gz"
-          DEST="$PWD/.cache/boost"
-          mkdir -p "$DEST"
-          curl -fSLo "$DEST/boost_${BOOST_VERSION_UNDERSCORE}.tar.gz" "$BOOST_URL"
-          tar -xf "$DEST/boost_${BOOST_VERSION_UNDERSCORE}.tar.gz" -C "$DEST"
-          BOOST_ROOT="$DEST/boost_${BOOST_VERSION_UNDERSCORE}"
-          echo "BOOST_ROOT=$BOOST_ROOT" >> "$GITHUB_ENV"
-          echo "BOOST_INCLUDEDIR=$BOOST_ROOT" >> "$GITHUB_ENV"
+          $boostVersion = $env:BOOST_VERSION
+          $boostVersionUnderscore = $boostVersion -replace '\.', '_'
+          $boostUrl = "https://archives.boost.io/release/$boostVersion/source/boost_${boostVersionUnderscore}.tar.gz"
+          $dest = Join-Path $env:GITHUB_WORKSPACE ".cache\\boost"
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          $archive = Join-Path $dest "boost_${boostVersionUnderscore}.tar.gz"
+          Invoke-WebRequest -Uri $boostUrl -OutFile $archive
+          tar -xf $archive -C $dest
+          $boostRoot = Join-Path $dest "boost_${boostVersionUnderscore}"
+          Add-Content -Path $env:GITHUB_ENV -Value "BOOST_ROOT=$boostRoot"
+          Add-Content -Path $env:GITHUB_ENV -Value "BOOST_INCLUDEDIR=$boostRoot"
       - name: Download Steamworks SDK
         shell: bash
         run: |
@@ -390,13 +391,13 @@ jobs:
           set -euo pipefail
           flatpak-builder --force-clean --repo=repo build-dir \
             packaging/flatpak/io.github.moeleak.connecttool-qt.yml
-          flatpak build-bundle repo connecttool-qt.flatpak "${FLATPAK_APP_ID}" \
+          flatpak build-bundle repo connecttool-qt-linux-x86_64.flatpak "${FLATPAK_APP_ID}" \
             --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: connecttool-qt-flatpak
-          path: connecttool-qt.flatpak
+          name: connecttool-qt-linux-x86_64
+          path: connecttool-qt-linux-x86_64.flatpak
           if-no-files-found: error
   release:
     name: Publish Release
