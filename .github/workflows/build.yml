@@ -352,7 +352,7 @@ jobs:
       FLATPAK_APP_ID: io.github.moeleak.connecttool-qt
       FLATPAK_RUNTIME: org.kde.Platform
       FLATPAK_SDK: org.kde.Sdk
-      FLATPAK_RUNTIME_VERSION: "6.9"
+      FLATPAK_RUNTIME_VERSION: "6.10"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

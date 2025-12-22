@@ -60,7 +60,7 @@
         {
           default = pkgs.stdenv.mkDerivation rec {
             pname = "connecttool-qt";
-            version = "1.5.11";
+            version = "1.5.12";
             dontWrapQtApps = pkgs.stdenv.isDarwin;
 
             # Keep entire working tree (including untracked) so new sources are present.
@@ -101,12 +101,14 @@
             buildPhase = "cmake --build build";
             installPhase = "cmake --install build --prefix $out";
 
-            postFixup = pkgs.lib.optionalString pkgs.stdenv.isLinux ''
-              patchelf --force-rpath --set-rpath "\$ORIGIN" $out/bin/libsteam_api.so
-              wrapProgram $out/bin/connecttool-qt --prefix LD_LIBRARY_PATH : "$out/bin"
-            '' + pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
-              wrapQtApp "$out/connecttool-qt.app/Contents/MacOS/connecttool-qt"
-            '';
+            postFixup =
+              pkgs.lib.optionalString pkgs.stdenv.isLinux ''
+                patchelf --force-rpath --set-rpath "\$ORIGIN" $out/bin/libsteam_api.so
+                wrapProgram $out/bin/connecttool-qt --prefix LD_LIBRARY_PATH : "$out/bin"
+              ''
+              + pkgs.lib.optionalString pkgs.stdenv.isDarwin ''
+                wrapQtApp "$out/connecttool-qt.app/Contents/MacOS/connecttool-qt"
+              '';
           };
         }
       );
