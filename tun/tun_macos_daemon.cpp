@@ -25,6 +25,8 @@
 #include <syslog.h>
 #include <unistd.h>
 
+extern "C" char **environ;
+
 namespace {
 constexpr size_t kMaxRequestSize = 1024;
 
@@ -193,8 +195,6 @@ bool parseInt(const std::string &text, int *out) {
     return false;
   }
 }
-
-extern char **environ;
 
 bool runCommand(const std::vector<std::string> &args, std::string *error) {
   if (args.empty()) {
